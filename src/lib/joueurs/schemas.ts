@@ -1,6 +1,33 @@
 import { z } from "zod";
 
-export const playerSchema = z.object({
+export const remiseMotifs = ["aucune", "parente", "autre"] as const;
+export type RemiseMotif = (typeof remiseMotifs)[number];
+
+export const REMISE_MOTIF_LABELS: Record<RemiseMotif, string> = {
+  aucune: "Aucune",
+  parente: "Lien de parenté",
+  autre: "Autre",
+};
+
+const remiseFields = {
+  remise_motif: z.enum(remiseMotifs).default("aucune"),
+  remise: z.coerce.number().nonnegative("Le montant doit être positif ou nul").default(0),
+};
+
+function checkRemise(
+  data: { remise_motif: RemiseMotif; remise: number },
+  ctx: z.RefinementCtx
+) {
+  if (data.remise_motif === "autre" && data.remise <= 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["remise"],
+      message: "Indique le montant de la remise",
+    });
+  }
+}
+
+const playerBaseSchema = z.object({
   nom: z.string().min(1, "Le nom est obligatoire"),
   prenom: z.string().min(1, "Le prénom est obligatoire"),
   date_naissance: z.string().min(1, "La date de naissance est obligatoire"),
@@ -9,11 +36,26 @@ export const playerSchema = z.object({
   telephone: z.string().optional(),
   ville: z.string().min(1, "La ville est obligatoire"),
   mute: z.boolean().default(false),
+  ...remiseFields,
   notes: z.string().optional(),
 });
 
+export const playerSchema = playerBaseSchema.superRefine(checkRemise);
+
 export type PlayerFormValues = z.output<typeof playerSchema>;
 export type PlayerFormInput = z.input<typeof playerSchema>;
+
+export const playerEditSchema = z
+  .object({
+    email: playerBaseSchema.shape.email,
+    telephone: playerBaseSchema.shape.telephone,
+    ville: playerBaseSchema.shape.ville,
+    ...remiseFields,
+  })
+  .superRefine(checkRemise);
+
+export type PlayerEditFormValues = z.output<typeof playerEditSchema>;
+export type PlayerEditFormInput = z.input<typeof playerEditSchema>;
 
 const montantPositif = z.coerce.number().positive("Le montant doit être positif");
 

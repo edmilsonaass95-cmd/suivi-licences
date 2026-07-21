@@ -8,7 +8,9 @@ import { formatDateFr, parseDateOnly } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AddPaymentDialog } from "@/components/joueurs/add-payment-dialog";
+import { EditPlayerDialog } from "@/components/joueurs/edit-player-dialog";
 import { PaymentHistory, type PaymentRow } from "@/components/joueurs/payment-history";
+import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
 
 const eur = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -93,7 +95,21 @@ export default async function PlayerDetailPage({
             )}
           </div>
         </div>
-        <AddPaymentDialog playerId={player.id} />
+        <div className="flex gap-2">
+          <EditPlayerDialog
+            playerId={player.id}
+            categorie={categorie}
+            mute={player.mute}
+            initial={{
+              email: player.email,
+              telephone: player.telephone,
+              ville: player.ville,
+              remise: Number(player.remise ?? 0),
+              remise_motif: player.remise_motif,
+            }}
+          />
+          <AddPaymentDialog playerId={player.id} />
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -148,6 +164,12 @@ export default async function PlayerDetailPage({
           <p>
             <span className="text-muted-foreground">Muté : </span>
             {player.mute ? "Oui" : "Non"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Remise : </span>
+            {player.remise_motif
+              ? `${eur.format(Number(player.remise))} (${REMISE_MOTIF_LABELS[player.remise_motif as "parente" | "autre"]})`
+              : "Aucune"}
           </p>
           {player.notes && (
             <p className="sm:col-span-2">

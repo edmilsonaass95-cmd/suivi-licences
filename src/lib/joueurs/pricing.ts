@@ -43,19 +43,33 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
 
 const SUPPLEMENT_HORS_SARCELLES = 20;
 
+export const REMISE_PARENTE = 20;
+
 export function isHorsSarcelles(ville: string): boolean {
   return ville.trim().toLowerCase() !== "sarcelles";
+}
+
+/** Le motif "parente" impose toujours le même montant ; "autre" utilise le montant saisi. */
+export function resolveRemise(
+  motif: "aucune" | "parente" | "autre",
+  remise: number
+): number {
+  if (motif === "parente") return REMISE_PARENTE;
+  if (motif === "autre") return remise;
+  return 0;
 }
 
 export function getLicencePrice(
   categorie: string,
   mute: boolean,
-  horsSarcelles: boolean
+  horsSarcelles: boolean,
+  remise = 0
 ): number {
   const pricing = LICENCE_PRICING[categorie];
   if (!pricing) return 0;
   let price = pricing.base;
   if (mute) price += pricing.mutation;
   if (horsSarcelles) price += SUPPLEMENT_HORS_SARCELLES;
-  return Math.round(price * 100) / 100;
+  price -= remise;
+  return Math.max(0, Math.round(price * 100) / 100);
 }

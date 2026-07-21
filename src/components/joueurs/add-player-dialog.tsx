@@ -10,13 +10,18 @@ import { toast } from "sonner";
 import { createPlayer } from "@/app/(app)/joueurs/actions";
 import { playerSchema, type PlayerFormInput } from "@/lib/joueurs/schemas";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
-import { getLicencePrice, isHorsSarcelles } from "@/lib/joueurs/pricing";
+import {
+  getLicencePrice,
+  isHorsSarcelles,
+  resolveRemise,
+} from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RemiseFields } from "@/components/joueurs/remise-fields";
 import {
   Select,
   SelectContent,
@@ -50,13 +55,21 @@ export function AddPlayerDialog() {
     formState: { errors, isSubmitting },
   } = useForm<PlayerFormInput>({
     resolver: zodResolver(playerSchema),
-    defaultValues: { sexe: "M", mute: false, ville: "Sarcelles" },
+    defaultValues: {
+      sexe: "M",
+      mute: false,
+      ville: "Sarcelles",
+      remise_motif: "aucune",
+      remise: 0,
+    },
   });
 
   const dateNaissance = watch("date_naissance");
   const sexe = watch("sexe");
   const mute = watch("mute");
   const ville = watch("ville");
+  const remiseMotif = watch("remise_motif") ?? "aucune";
+  const remise = watch("remise") ?? 0;
   const horsSarcelles = isHorsSarcelles(ville ?? "");
 
   let preview: { categorie: string; prix: number } | null = null;
@@ -68,7 +81,12 @@ export function AddPlayerDialog() {
     );
     preview = {
       categorie,
-      prix: getLicencePrice(categorie, !!mute, horsSarcelles),
+      prix: getLicencePrice(
+        categorie,
+        !!mute,
+        horsSarcelles,
+        resolveRemise(remiseMotif, Number(remise))
+      ),
     };
   }
 
@@ -195,6 +213,17 @@ export function AddPlayerDialog() {
               Joueur muté (transféré d&apos;un autre club)
             </label>
           </div>
+
+          <RemiseFields
+            motif={remiseMotif}
+            remise={remise as number}
+            onMotifChange={(m) => {
+              setValue("remise_motif", m);
+              if (m !== "autre") setValue("remise", 0);
+            }}
+            onRemiseChange={(v) => setValue("remise", v as unknown as number)}
+            error={errors.remise?.message}
+          />
 
           {preview && (
             <div className="col-span-2 rounded-lg bg-muted p-3 text-sm">

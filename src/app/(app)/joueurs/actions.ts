@@ -2,9 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { paymentSchema, playerSchema } from "@/lib/joueurs/schemas";
+import {
+  paymentSchema,
+  playerEditSchema,
+  playerSchema,
+} from "@/lib/joueurs/schemas";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
-import { getLicencePrice, isHorsSarcelles } from "@/lib/joueurs/pricing";
+import {
+  getLicencePrice,
+  isHorsSarcelles,
+  resolveRemise,
+} from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 
 export async function createPlayer(values: unknown) {
@@ -20,7 +28,8 @@ export async function createPlayer(values: unknown) {
     getSaisonStart()
   );
   const horsSarcelles = isHorsSarcelles(v.ville);
-  const licencePrice = getLicencePrice(categorie, v.mute, horsSarcelles);
+  const remise = resolveRemise(v.remise_motif, v.remise);
+  const licencePrice = getLicencePrice(categorie, v.mute, horsSarcelles, remise);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -35,6 +44,8 @@ export async function createPlayer(values: unknown) {
       ville: v.ville,
       mute: v.mute,
       hors_sarcelles: horsSarcelles,
+      remise,
+      remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
       licence_price: licencePrice,
       notes: v.notes || null,
     })
@@ -53,6 +64,58 @@ export async function createPlayer(values: unknown) {
 
   revalidatePath("/joueurs");
   return { id: data.id as string };
+}
+
+export async function updatePlayer(playerId: string, values: unknown) {
+  const parsed = playerEditSchema.safeParse(values);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  }
+  const v = parsed.data;
+
+  const supabase = await createClient();
+  const { data: player, error: fetchError } = await supabase
+    .from("players")
+    .select("date_naissance, sexe, mute")
+    .eq("id", playerId)
+    .single();
+
+  if (fetchError || !player) {
+    return { error: fetchError?.message ?? "Joueur introuvable" };
+  }
+
+  const categorie = getCategorieFFF(
+    parseDateOnly(player.date_naissance),
+    player.sexe as "M" | "F",
+    getSaisonStart()
+  );
+  const horsSarcelles = isHorsSarcelles(v.ville);
+  const remise = resolveRemise(v.remise_motif, v.remise);
+  const licencePrice = getLicencePrice(
+    categorie,
+    player.mute,
+    horsSarcelles,
+    remise
+  );
+
+  const { error } = await supabase
+    .from("players")
+    .update({
+      email: v.email || null,
+      telephone: v.telephone || null,
+      ville: v.ville,
+      hors_sarcelles: horsSarcelles,
+      remise,
+      remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
+      licence_price: licencePrice,
+    })
+    .eq("id", playerId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/joueurs/${playerId}`);
+  revalidatePath("/joueurs");
+  return { success: true };
 }
 
 export async function createPayment(playerId: string, values: unknown) {
