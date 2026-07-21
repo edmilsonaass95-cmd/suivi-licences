@@ -16,7 +16,7 @@ export function SignOutButton() {
   };
 
   return (
-    <DropdownMenuItem onSelect={handleSignOut} variant="destructive">
+    <DropdownMenuItem onClick={handleSignOut} variant="destructive">
       <LogOut />
       Se déconnecter
     </DropdownMenuItem>
