@@ -19,7 +19,7 @@ export function getCategorieFFF(
 
   if (diff <= 20) {
     const label = `U${diff}`;
-    return sexe === "F" && diff >= 15 ? `${label}F` : label;
+    return sexe === "F" ? `${label}F` : label;
   }
 
   // Au-delà de U20 : Senior ou Vétéran, selon l'âge au 2 septembre de la saison.

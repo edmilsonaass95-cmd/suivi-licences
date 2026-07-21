@@ -27,13 +27,11 @@ describe("getCategorieFFF", () => {
     ).toBe(expected);
   });
 
-  it("ajoute le suffixe F pour les filles à partir de U15", () => {
+  it("ajoute le suffixe F pour toutes les catégories féminines", () => {
     expect(getCategorieFFF(new Date(2012, 5, 15), "F", SAISON)).toBe("U15F");
     expect(getCategorieFFF(new Date(2007, 5, 15), "F", SAISON)).toBe("U20F");
-  });
-
-  it("ne suffixe pas les catégories en dessous de U15", () => {
-    expect(getCategorieFFF(new Date(2016, 5, 15), "F", SAISON)).toBe("U11");
+    expect(getCategorieFFF(new Date(2016, 5, 15), "F", SAISON)).toBe("U11F");
+    expect(getCategorieFFF(new Date(2021, 5, 15), "F", SAISON)).toBe("U6F");
   });
 
   it("classe en Senior en dessous de 35 ans", () => {

@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { paymentSchema, playerSchema } from "@/lib/joueurs/schemas";
+import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
+import { getLicencePrice } from "@/lib/joueurs/pricing";
+import { parseDateOnly } from "@/lib/date";
 
 export async function createPlayer(values: unknown) {
   const parsed = playerSchema.safeParse(values);
@@ -10,6 +13,13 @@ export async function createPlayer(values: unknown) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
   const v = parsed.data;
+
+  const categorie = getCategorieFFF(
+    parseDateOnly(v.date_naissance),
+    v.sexe,
+    getSaisonStart()
+  );
+  const licencePrice = getLicencePrice(categorie, v.mute, v.hors_sarcelles);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -22,7 +32,9 @@ export async function createPlayer(values: unknown) {
       email: v.email || null,
       telephone: v.telephone || null,
       adresse: v.adresse || null,
-      licence_price: v.licence_price,
+      mute: v.mute,
+      hors_sarcelles: v.hors_sarcelles,
+      licence_price: licencePrice,
       notes: v.notes || null,
     })
     .select("id")
