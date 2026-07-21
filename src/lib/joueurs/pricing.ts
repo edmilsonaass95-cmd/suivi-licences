@@ -43,6 +43,10 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
 
 const SUPPLEMENT_HORS_SARCELLES = 20;
 
+export function isHorsSarcelles(ville: string): boolean {
+  return ville.trim().toLowerCase() !== "sarcelles";
+}
+
 export function getLicencePrice(
   categorie: string,
   mute: boolean,

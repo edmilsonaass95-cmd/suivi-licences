@@ -7,9 +7,8 @@ export const playerSchema = z.object({
   sexe: z.enum(["M", "F"]),
   email: z.string().email("E-mail invalide").optional().or(z.literal("")),
   telephone: z.string().optional(),
-  adresse: z.string().optional(),
+  ville: z.string().min(1, "La ville est obligatoire"),
   mute: z.boolean().default(false),
-  hors_sarcelles: z.boolean().default(false),
   notes: z.string().optional(),
 });
 

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { paymentSchema, playerSchema } from "@/lib/joueurs/schemas";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
-import { getLicencePrice } from "@/lib/joueurs/pricing";
+import { getLicencePrice, isHorsSarcelles } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 
 export async function createPlayer(values: unknown) {
@@ -19,7 +19,8 @@ export async function createPlayer(values: unknown) {
     v.sexe,
     getSaisonStart()
   );
-  const licencePrice = getLicencePrice(categorie, v.mute, v.hors_sarcelles);
+  const horsSarcelles = isHorsSarcelles(v.ville);
+  const licencePrice = getLicencePrice(categorie, v.mute, horsSarcelles);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -31,9 +32,9 @@ export async function createPlayer(values: unknown) {
       sexe: v.sexe,
       email: v.email || null,
       telephone: v.telephone || null,
-      adresse: v.adresse || null,
+      ville: v.ville,
       mute: v.mute,
-      hors_sarcelles: v.hors_sarcelles,
+      hors_sarcelles: horsSarcelles,
       licence_price: licencePrice,
       notes: v.notes || null,
     })

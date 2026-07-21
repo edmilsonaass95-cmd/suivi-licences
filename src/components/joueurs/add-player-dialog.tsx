@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { createPlayer } from "@/app/(app)/joueurs/actions";
 import { playerSchema, type PlayerFormInput } from "@/lib/joueurs/schemas";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
-import { getLicencePrice } from "@/lib/joueurs/pricing";
+import { getLicencePrice, isHorsSarcelles } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,13 +50,14 @@ export function AddPlayerDialog() {
     formState: { errors, isSubmitting },
   } = useForm<PlayerFormInput>({
     resolver: zodResolver(playerSchema),
-    defaultValues: { sexe: "M", mute: false, hors_sarcelles: false },
+    defaultValues: { sexe: "M", mute: false, ville: "Sarcelles" },
   });
 
   const dateNaissance = watch("date_naissance");
   const sexe = watch("sexe");
   const mute = watch("mute");
-  const horsSarcelles = watch("hors_sarcelles");
+  const ville = watch("ville");
+  const horsSarcelles = isHorsSarcelles(ville ?? "");
 
   let preview: { categorie: string; prix: number } | null = null;
   if (dateNaissance) {
@@ -67,7 +68,7 @@ export function AddPlayerDialog() {
     );
     preview = {
       categorie,
-      prix: getLicencePrice(categorie, !!mute, !!horsSarcelles),
+      prix: getLicencePrice(categorie, !!mute, horsSarcelles),
     };
   }
 
@@ -169,8 +170,18 @@ export function AddPlayerDialog() {
             <Input id="telephone" {...register("telephone")} />
           </div>
           <div className="col-span-2 space-y-1.5">
-            <Label htmlFor="adresse">Adresse</Label>
-            <Input id="adresse" {...register("adresse")} />
+            <Label htmlFor="ville">Ville</Label>
+            <Input id="ville" {...register("ville")} />
+            {errors.ville && (
+              <p className="text-sm text-destructive">
+                {errors.ville.message}
+              </p>
+            )}
+            {ville && horsSarcelles && (
+              <p className="text-sm text-muted-foreground">
+                Hors Sarcelles : +20€ appliqués automatiquement.
+              </p>
+            )}
           </div>
 
           <div className="col-span-2 flex flex-col gap-2 rounded-lg border border-border p-3">
@@ -182,15 +193,6 @@ export function AddPlayerDialog() {
                 }
               />
               Joueur muté (transféré d&apos;un autre club)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={!!horsSarcelles}
-                onCheckedChange={(checked) =>
-                  setValue("hors_sarcelles", checked === true)
-                }
-              />
-              N&apos;habite pas à Sarcelles (+20€)
             </label>
           </div>
 

@@ -141,9 +141,13 @@ export default async function PlayerDetailPage({
             <span className="text-muted-foreground">Téléphone : </span>
             {player.telephone ?? "—"}
           </p>
-          <p className="sm:col-span-2">
-            <span className="text-muted-foreground">Adresse : </span>
-            {player.adresse ?? "—"}
+          <p>
+            <span className="text-muted-foreground">Ville : </span>
+            {player.ville ?? "—"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Muté : </span>
+            {player.mute ? "Oui" : "Non"}
           </p>
           {player.notes && (
             <p className="sm:col-span-2">
