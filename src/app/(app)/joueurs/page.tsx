@@ -1,10 +1,51 @@
-export default function JoueursPage() {
+import { createClient } from "@/lib/supabase/server";
+import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
+import { parseDateOnly } from "@/lib/date";
+import { AddPlayerDialog } from "@/components/joueurs/add-player-dialog";
+import { PlayersTable, type PlayerRow } from "@/components/joueurs/players-table";
+
+export default async function JoueursPage() {
+  const supabase = await createClient();
+  const [{ data: players }, { data: balances }] = await Promise.all([
+    supabase.from("players").select("*").order("nom"),
+    supabase.from("player_balances").select("*"),
+  ]);
+
+  const balanceByPlayer = new Map(
+    (balances ?? []).map((b) => [b.player_id, b])
+  );
+  const saisonStart = getSaisonStart();
+
+  const rows: PlayerRow[] = (players ?? []).map((p) => {
+    const balance = balanceByPlayer.get(p.id);
+    const licencePrice = Number(p.licence_price);
+    const paid = Number(balance?.paid ?? 0);
+    const solde = Number(balance?.solde ?? licencePrice);
+    return {
+      id: p.id,
+      nom: p.nom,
+      prenom: p.prenom,
+      categorie: getCategorieFFF(
+        parseDateOnly(p.date_naissance),
+        p.sexe as "M" | "F",
+        saisonStart
+      ),
+      licencePrice,
+      paid,
+      solde,
+    };
+  });
+
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Joueurs</h1>
-      <p className="mt-2 text-muted-foreground">
-        La liste des joueurs sera construite à l&apos;étape suivante.
-      </p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Joueurs</h1>
+          <p className="text-muted-foreground">{rows.length} joueur(s)</p>
+        </div>
+        <AddPlayerDialog />
+      </div>
+      <PlayersTable rows={rows} />
     </div>
   );
 }

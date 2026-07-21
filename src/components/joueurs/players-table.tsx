@@ -1,0 +1,169 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+export type PlayerRow = {
+  id: string;
+  nom: string;
+  prenom: string;
+  categorie: string;
+  licencePrice: number;
+  paid: number;
+  solde: number;
+};
+
+const eur = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+});
+
+function StatusBadge({ paid, expected }: { paid: number; expected: number }) {
+  if (expected > 0 && paid >= expected) {
+    return <Badge>Payé</Badge>;
+  }
+  if (paid > 0) {
+    return (
+      <Badge className="border-transparent bg-amber-500 text-white">
+        Partiel
+      </Badge>
+    );
+  }
+  return <Badge variant="destructive">Dû</Badge>;
+}
+
+export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
+  const [search, setSearch] = useState("");
+  const [categorie, setCategorie] = useState("toutes");
+  const [statut, setStatut] = useState("tous");
+
+  const categories = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.categorie))).sort(),
+    [rows]
+  );
+
+  const filtered = rows.filter((r) => {
+    const matchesSearch = `${r.nom} ${r.prenom}`
+      .toLowerCase()
+      .includes(search.toLowerCase());
+    const matchesCategorie =
+      categorie === "toutes" || r.categorie === categorie;
+    const isSolde = r.licencePrice > 0 && r.paid >= r.licencePrice;
+    const matchesStatut =
+      statut === "tous" ||
+      (statut === "solde" && isSolde) ||
+      (statut === "du" && !isSolde);
+    return matchesSearch && matchesCategorie && matchesStatut;
+  });
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Input
+          placeholder="Rechercher un joueur..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs"
+        />
+        <Select
+          value={categorie}
+          onValueChange={(v) => setCategorie(v ?? "toutes")}
+        >
+          <SelectTrigger>
+            <SelectValue>
+              {(v: string) => (v === "toutes" ? "Toutes catégories" : v)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="toutes">Toutes catégories</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statut} onValueChange={(v) => setStatut(v ?? "tous")}>
+          <SelectTrigger>
+            <SelectValue>
+              {(v: string) =>
+                v === "tous" ? "Tous statuts" : v === "solde" ? "Soldé" : "Dû"
+              }
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tous">Tous statuts</SelectItem>
+            <SelectItem value="solde">Soldé</SelectItem>
+            <SelectItem value="du">Dû</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nom</TableHead>
+              <TableHead>Catégorie</TableHead>
+              <TableHead className="text-right">Prix licence</TableHead>
+              <TableHead className="text-right">Payé</TableHead>
+              <TableHead className="text-right">Solde</TableHead>
+              <TableHead>Statut</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  Aucun joueur trouvé.
+                </TableCell>
+              </TableRow>
+            )}
+            {filtered.map((r) => (
+              <TableRow key={r.id} className="cursor-pointer">
+                <TableCell>
+                  <Link
+                    href={`/joueurs/${r.id}`}
+                    className="block hover:underline"
+                  >
+                    {r.nom} {r.prenom}
+                  </Link>
+                </TableCell>
+                <TableCell>{r.categorie}</TableCell>
+                <TableCell className="text-right">
+                  {eur.format(r.licencePrice)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {eur.format(r.paid)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {eur.format(r.solde)}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge paid={r.paid} expected={r.licencePrice} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}

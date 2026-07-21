@@ -111,6 +111,7 @@ function LoginForm() {
 }
 
 function SignupForm() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const {
@@ -135,7 +136,8 @@ function SignupForm() {
     }
 
     if (data.session) {
-      window.location.href = "/dashboard";
+      router.push("/dashboard");
+      router.refresh();
       return;
     }
 
