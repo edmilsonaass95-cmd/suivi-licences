@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RemiseFields } from "@/components/joueurs/remise-fields";
+import { RemiseFields, type PlayerOption } from "@/components/joueurs/remise-fields";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,7 @@ export function EditPlayerDialog({
   categorie,
   mute,
   initial,
+  players,
 }: {
   playerId: string;
   categorie: string;
@@ -50,7 +51,9 @@ export function EditPlayerDialog({
     ville: string;
     remise: number;
     remise_motif: "parente" | "autre" | null;
+    remise_lien_joueur_id: string | null;
   };
+  players: PlayerOption[];
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -69,12 +72,15 @@ export function EditPlayerDialog({
       ville: initial.ville,
       remise_motif: initial.remise_motif ?? "aucune",
       remise: initial.remise_motif === "autre" ? initial.remise : 0,
+      remise_lien_joueur_id: initial.remise_lien_joueur_id ?? "",
     },
   });
 
   const ville = watch("ville");
   const remiseMotif = (watch("remise_motif") ?? "aucune") as RemiseMotif;
   const remise = watch("remise") ?? 0;
+  const remiseLienJoueurId = watch("remise_lien_joueur_id");
+  const otherPlayers = players.filter((p) => p.id !== playerId);
   const horsSarcelles = isHorsSarcelles(ville ?? "");
   const prix = getLicencePrice(
     categorie,
@@ -150,9 +156,16 @@ export function EditPlayerDialog({
             onMotifChange={(m) => {
               setValue("remise_motif", m);
               if (m !== "autre") setValue("remise", 0);
+              if (m !== "parente") setValue("remise_lien_joueur_id", "");
             }}
             onRemiseChange={(v) => setValue("remise", v as unknown as number)}
             error={errors.remise?.message}
+            players={otherPlayers}
+            linkedPlayerId={remiseLienJoueurId}
+            onLinkedPlayerChange={(id) =>
+              setValue("remise_lien_joueur_id", id)
+            }
+            linkedError={errors.remise_lien_joueur_id?.message}
           />
 
           <div className="col-span-2 rounded-lg bg-muted p-3 text-sm">

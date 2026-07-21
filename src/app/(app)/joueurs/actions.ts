@@ -46,6 +46,8 @@ export async function createPlayer(values: unknown) {
       hors_sarcelles: horsSarcelles,
       remise,
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
+      remise_lien_joueur_id:
+        v.remise_motif === "parente" ? v.remise_lien_joueur_id : null,
       licence_price: licencePrice,
       notes: v.notes || null,
     })
@@ -72,6 +74,10 @@ export async function updatePlayer(playerId: string, values: unknown) {
     return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
   const v = parsed.data;
+
+  if (v.remise_motif === "parente" && v.remise_lien_joueur_id === playerId) {
+    return { error: "Un joueur ne peut pas être lié à lui-même." };
+  }
 
   const supabase = await createClient();
   const { data: player, error: fetchError } = await supabase
@@ -107,6 +113,8 @@ export async function updatePlayer(playerId: string, values: unknown) {
       hors_sarcelles: horsSarcelles,
       remise,
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
+      remise_lien_joueur_id:
+        v.remise_motif === "parente" ? v.remise_lien_joueur_id : null,
       licence_price: licencePrice,
     })
     .eq("id", playerId);

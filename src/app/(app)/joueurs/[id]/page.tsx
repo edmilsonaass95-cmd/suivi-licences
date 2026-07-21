@@ -25,7 +25,7 @@ export default async function PlayerDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: player }, { data: balance }, { data: payments }] =
+  const [{ data: player }, { data: balance }, { data: payments }, { data: allPlayers }] =
     await Promise.all([
       supabase.from("players").select("*").eq("id", id).maybeSingle(),
       supabase
@@ -38,9 +38,14 @@ export default async function PlayerDetailPage({
         .select("*, cheques(*), prelevements(*)")
         .eq("player_id", id)
         .order("created_at", { ascending: false }),
+      supabase.from("players").select("id, nom, prenom").order("nom"),
     ]);
 
   if (!player) notFound();
+
+  const linkedPlayer = player.remise_lien_joueur_id
+    ? (allPlayers ?? []).find((p) => p.id === player.remise_lien_joueur_id)
+    : null;
 
   const licencePrice = Number(player.licence_price);
   const paid = Number(balance?.paid ?? 0);
@@ -106,7 +111,13 @@ export default async function PlayerDetailPage({
               ville: player.ville,
               remise: Number(player.remise ?? 0),
               remise_motif: player.remise_motif,
+              remise_lien_joueur_id: player.remise_lien_joueur_id,
             }}
+            players={(allPlayers ?? []).map((p) => ({
+              id: p.id,
+              nom: p.nom,
+              prenom: p.prenom,
+            }))}
           />
           <AddPaymentDialog playerId={player.id} />
         </div>
@@ -168,7 +179,11 @@ export default async function PlayerDetailPage({
           <p>
             <span className="text-muted-foreground">Remise : </span>
             {player.remise_motif
-              ? `${eur.format(Number(player.remise))} (${REMISE_MOTIF_LABELS[player.remise_motif as "parente" | "autre"]})`
+              ? `${eur.format(Number(player.remise))} (${REMISE_MOTIF_LABELS[player.remise_motif as "parente" | "autre"]}${
+                  linkedPlayer
+                    ? ` — ${linkedPlayer.nom} ${linkedPlayer.prenom}`
+                    : ""
+                })`
               : "Aucune"}
           </p>
           {player.notes && (

@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RemiseFields } from "@/components/joueurs/remise-fields";
+import { RemiseFields, type PlayerOption } from "@/components/joueurs/remise-fields";
 import {
   Select,
   SelectContent,
@@ -43,7 +43,7 @@ const eur = new Intl.NumberFormat("fr-FR", {
   currency: "EUR",
 });
 
-export function AddPlayerDialog() {
+export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const {
@@ -61,6 +61,7 @@ export function AddPlayerDialog() {
       ville: "Sarcelles",
       remise_motif: "aucune",
       remise: 0,
+      remise_lien_joueur_id: "",
     },
   });
 
@@ -70,6 +71,7 @@ export function AddPlayerDialog() {
   const ville = watch("ville");
   const remiseMotif = watch("remise_motif") ?? "aucune";
   const remise = watch("remise") ?? 0;
+  const remiseLienJoueurId = watch("remise_lien_joueur_id");
   const horsSarcelles = isHorsSarcelles(ville ?? "");
 
   let preview: { categorie: string; prix: number } | null = null;
@@ -220,9 +222,16 @@ export function AddPlayerDialog() {
             onMotifChange={(m) => {
               setValue("remise_motif", m);
               if (m !== "autre") setValue("remise", 0);
+              if (m !== "parente") setValue("remise_lien_joueur_id", "");
             }}
             onRemiseChange={(v) => setValue("remise", v as unknown as number)}
             error={errors.remise?.message}
+            players={players}
+            linkedPlayerId={remiseLienJoueurId}
+            onLinkedPlayerChange={(id) =>
+              setValue("remise_lien_joueur_id", id)
+            }
+            linkedError={errors.remise_lien_joueur_id?.message}
           />
 
           {preview && (

@@ -16,18 +16,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+export type PlayerOption = { id: string; nom: string; prenom: string };
+
 export function RemiseFields({
   motif,
   remise,
   onMotifChange,
   onRemiseChange,
   error,
+  players,
+  linkedPlayerId,
+  onLinkedPlayerChange,
+  linkedError,
 }: {
   motif: RemiseMotif;
   remise: number | string;
   onMotifChange: (motif: RemiseMotif) => void;
   onRemiseChange: (value: string) => void;
   error?: string;
+  players: PlayerOption[];
+  linkedPlayerId: string | undefined;
+  onLinkedPlayerChange: (id: string) => void;
+  linkedError?: string;
 }) {
   return (
     <div className="col-span-2 space-y-1.5">
@@ -49,11 +59,44 @@ export function RemiseFields({
           ))}
         </SelectContent>
       </Select>
+
       {motif === "parente" && (
-        <p className="text-sm text-muted-foreground">
-          Remise fixe de {REMISE_PARENTE}€ appliquée.
-        </p>
+        <>
+          <p className="text-sm text-muted-foreground">
+            Remise fixe de {REMISE_PARENTE}€ appliquée.
+          </p>
+          <Label className="pt-1.5">Joueur ou joueuse concerné(e)</Label>
+          <Select
+            value={linkedPlayerId ?? ""}
+            onValueChange={(v) => onLinkedPlayerChange(v ?? "")}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Choisir un joueur ou une joueuse">
+                {(v: string) => {
+                  const p = players.find((pl) => pl.id === v);
+                  return p ? `${p.nom} ${p.prenom}` : "Choisir";
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {players.length === 0 && (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  Aucun autre joueur enregistré
+                </div>
+              )}
+              {players.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.nom} {p.prenom}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {linkedError && (
+            <p className="text-sm text-destructive">{linkedError}</p>
+          )}
+        </>
       )}
+
       {motif === "autre" && (
         <>
           <Input

@@ -43,7 +43,13 @@ export default async function JoueursPage() {
           <h1 className="text-2xl font-semibold">Joueurs</h1>
           <p className="text-muted-foreground">{rows.length} joueur(s)</p>
         </div>
-        <AddPlayerDialog />
+        <AddPlayerDialog
+          players={(players ?? []).map((p) => ({
+            id: p.id,
+            nom: p.nom,
+            prenom: p.prenom,
+          }))}
+        />
       </div>
       <PlayersTable rows={rows} />
     </div>

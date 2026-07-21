@@ -12,10 +12,15 @@ export const REMISE_MOTIF_LABELS: Record<RemiseMotif, string> = {
 const remiseFields = {
   remise_motif: z.enum(remiseMotifs).default("aucune"),
   remise: z.coerce.number().nonnegative("Le montant doit être positif ou nul").default(0),
+  remise_lien_joueur_id: z.string().optional(),
 };
 
 function checkRemise(
-  data: { remise_motif: RemiseMotif; remise: number },
+  data: {
+    remise_motif: RemiseMotif;
+    remise: number;
+    remise_lien_joueur_id?: string;
+  },
   ctx: z.RefinementCtx
 ) {
   if (data.remise_motif === "autre" && data.remise <= 0) {
@@ -23,6 +28,13 @@ function checkRemise(
       code: "custom",
       path: ["remise"],
       message: "Indique le montant de la remise",
+    });
+  }
+  if (data.remise_motif === "parente" && !data.remise_lien_joueur_id) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["remise_lien_joueur_id"],
+      message: "Sélectionne le joueur ou la joueuse concerné(e)",
     });
   }
 }
