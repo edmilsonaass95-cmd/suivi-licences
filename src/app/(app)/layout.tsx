@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -58,20 +59,20 @@ export default async function AppLayout({
           </span>
           <div className="ml-auto">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-accent">
-                  <Avatar className="size-7">
-                    <AvatarFallback className="text-xs">
-                      {initials(displayName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="hidden sm:inline">{displayName}</span>
-                </button>
+              <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-accent">
+                <Avatar className="size-7">
+                  <AvatarFallback className="text-xs">
+                    {initials(displayName)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="hidden sm:inline">{displayName}</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel className="truncate">
-                  {user?.email}
-                </DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="truncate">
+                    {user?.email}
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <SignOutButton />
               </DropdownMenuContent>
