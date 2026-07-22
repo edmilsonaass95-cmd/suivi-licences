@@ -167,6 +167,7 @@ export async function createPayment(playerId: string, values: unknown) {
         montant: c.montant,
         date_encaissement: c.date_encaissement,
         banque: c.banque || null,
+        numero_cheque: c.numero_cheque || null,
       }))
     );
     if (chequesError) return { error: chequesError.message };

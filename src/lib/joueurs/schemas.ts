@@ -75,6 +75,7 @@ export const chequeItemSchema = z.object({
   montant: montantPositif,
   date_encaissement: z.string().min(1, "Date obligatoire"),
   banque: z.string().optional(),
+  numero_cheque: z.string().optional(),
 });
 
 export const echeanceItemSchema = z.object({

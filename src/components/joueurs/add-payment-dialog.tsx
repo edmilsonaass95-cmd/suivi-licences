@@ -39,13 +39,19 @@ const SIMPLE_MODES: Mode[] = [
   "pass_sport",
 ];
 
-type ChequeRow = { montant: string; date_encaissement: string; banque: string };
+type ChequeRow = {
+  montant: string;
+  date_encaissement: string;
+  banque: string;
+  numero_cheque: string;
+};
 type EcheanceRow = { montant: string; date_prelevement: string };
 
 const emptyCheque: ChequeRow = {
   montant: "",
   date_encaissement: "",
   banque: "",
+  numero_cheque: "",
 };
 const emptyEcheance: EcheanceRow = { montant: "", date_prelevement: "" };
 
@@ -85,6 +91,7 @@ export function AddPaymentDialog({ playerId }: { playerId: string }) {
           montant: Number(c.montant),
           date_encaissement: c.date_encaissement,
           banque: c.banque || undefined,
+          numero_cheque: c.numero_cheque || undefined,
         })),
       };
     } else if (mode === "prelevement") {
@@ -236,7 +243,7 @@ function ChequesFields({
       {rows.map((row, i) => (
         <div
           key={i}
-          className="grid grid-cols-3 gap-2 rounded-lg border border-border p-2"
+          className="grid grid-cols-2 gap-2 rounded-lg border border-border p-2"
         >
           <div className="space-y-1">
             <Label className="text-xs">Montant (€)</Label>
@@ -247,6 +254,13 @@ function ChequesFields({
               required
               value={row.montant}
               onChange={(e) => update(i, { montant: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">N° du chèque</Label>
+            <Input
+              value={row.numero_cheque}
+              onChange={(e) => update(i, { numero_cheque: e.target.value })}
             />
           </div>
           <div className="space-y-1">

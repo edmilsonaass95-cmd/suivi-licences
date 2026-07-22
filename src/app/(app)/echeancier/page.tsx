@@ -12,6 +12,7 @@ export default async function EcheancierPage() {
   const rows: ChequeRow[] = (data ?? []).map((c) => ({
     id: c.id,
     numeroOrdre: c.numero_ordre,
+    numeroCheque: c.numero_cheque,
     montant: Number(c.montant),
     dateEncaissement: c.date_encaissement,
     statut: c.statut,

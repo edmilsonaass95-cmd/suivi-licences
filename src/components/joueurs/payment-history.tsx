@@ -1,3 +1,11 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { MoreHorizontalIcon } from "lucide-react";
+
+import { updateChequeStatut } from "@/app/(app)/echeancier/actions";
+import { updatePrelevementStatut } from "@/app/(app)/prelevements/actions";
 import { PAYMENT_MODE_LABELS, type PaymentFormValues } from "@/lib/joueurs/schemas";
 import { formatDateFr } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +17,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const eur = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -16,7 +30,9 @@ const eur = new Intl.NumberFormat("fr-FR", {
 });
 
 type Cheque = {
+  id: string;
   numero_ordre: number;
+  numero_cheque: string | null;
   montant: number;
   date_encaissement: string;
   statut: "a_encaisser" | "encaisse" | "impaye";
@@ -24,6 +40,7 @@ type Cheque = {
 };
 
 type Prelevement = {
+  id: string;
   numero_echeance: number;
   montant: number;
   date_prelevement: string;
@@ -53,6 +70,38 @@ const PRELEVEMENT_STATUT_LABEL: Record<Prelevement["statut"], string> = {
 };
 
 export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
+  const router = useRouter();
+
+  const handleChequeStatut = async (
+    chequeId: string,
+    statut: Cheque["statut"]
+  ) => {
+    const result = await updateChequeStatut(chequeId, statut);
+    if (result.error) {
+      toast.error("Impossible de mettre à jour le chèque", {
+        description: result.error,
+      });
+      return;
+    }
+    toast.success("Statut mis à jour");
+    router.refresh();
+  };
+
+  const handlePrelevementStatut = async (
+    id: string,
+    statut: Prelevement["statut"]
+  ) => {
+    const result = await updatePrelevementStatut(id, statut);
+    if (result.error) {
+      toast.error("Impossible de mettre à jour le prélèvement", {
+        description: result.error,
+      });
+      return;
+    }
+    toast.success("Statut mis à jour");
+    router.refresh();
+  };
+
   if (payments.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -92,16 +141,19 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>#</TableHead>
+                  <TableHead>N° chèque</TableHead>
                   <TableHead className="text-right">Montant</TableHead>
                   <TableHead>Date d&apos;encaissement</TableHead>
                   <TableHead>Banque</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {payment.cheques.map((c) => (
-                  <TableRow key={c.numero_ordre}>
+                  <TableRow key={c.id}>
                     <TableCell>{c.numero_ordre}</TableCell>
+                    <TableCell>{c.numero_cheque ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       {eur.format(c.montant)}
                     </TableCell>
@@ -115,6 +167,37 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                       >
                         {CHEQUE_STATUT_LABEL[c.statut]}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
+                          <MoreHorizontalIcon className="size-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            disabled={c.statut === "encaisse"}
+                            onClick={() =>
+                              handleChequeStatut(c.id, "encaisse")
+                            }
+                          >
+                            Marquer encaissé
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={c.statut === "impaye"}
+                            onClick={() => handleChequeStatut(c.id, "impaye")}
+                          >
+                            Marquer impayé
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={c.statut === "a_encaisser"}
+                            onClick={() =>
+                              handleChequeStatut(c.id, "a_encaisser")
+                            }
+                          >
+                            Remettre à encaisser
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -130,11 +213,12 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                   <TableHead className="text-right">Montant</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {payment.prelevements.map((e) => (
-                  <TableRow key={e.numero_echeance}>
+                  <TableRow key={e.id}>
                     <TableCell>{e.numero_echeance}</TableCell>
                     <TableCell className="text-right">
                       {eur.format(e.montant)}
@@ -148,6 +232,39 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                       >
                         {PRELEVEMENT_STATUT_LABEL[e.statut]}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
+                          <MoreHorizontalIcon className="size-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            disabled={e.statut === "preleve"}
+                            onClick={() =>
+                              handlePrelevementStatut(e.id, "preleve")
+                            }
+                          >
+                            Marquer prélevé
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={e.statut === "echec"}
+                            onClick={() =>
+                              handlePrelevementStatut(e.id, "echec")
+                            }
+                          >
+                            Marquer échec
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={e.statut === "prevu"}
+                            onClick={() =>
+                              handlePrelevementStatut(e.id, "prevu")
+                            }
+                          >
+                            Remettre à venir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}

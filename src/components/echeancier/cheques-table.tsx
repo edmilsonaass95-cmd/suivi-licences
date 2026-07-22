@@ -34,6 +34,7 @@ import {
 export type ChequeRow = {
   id: string;
   numeroOrdre: number;
+  numeroCheque: string | null;
   montant: number;
   dateEncaissement: string;
   statut: "a_encaisser" | "encaisse" | "impaye";
@@ -157,6 +158,7 @@ export function ChequesTable({ rows }: { rows: ChequeRow[] }) {
                 <TableRow>
                   <TableHead>Joueur</TableHead>
                   <TableHead>#</TableHead>
+                  <TableHead>N° chèque</TableHead>
                   <TableHead className="text-right">Montant</TableHead>
                   <TableHead>Date d&apos;encaissement</TableHead>
                   <TableHead>Banque</TableHead>
@@ -176,6 +178,7 @@ export function ChequesTable({ rows }: { rows: ChequeRow[] }) {
                       </Link>
                     </TableCell>
                     <TableCell>{row.numeroOrdre}</TableCell>
+                    <TableCell>{row.numeroCheque ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       {eur.format(row.montant)}
                     </TableCell>

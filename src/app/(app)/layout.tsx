@@ -16,6 +16,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SignOutButton } from "@/components/sign-out-button";
+import {
+  syncOverdueCheques,
+  syncOverduePrelevements,
+} from "@/lib/payments/sync-statuts";
 
 function initials(nameOrEmail: string) {
   const base = nameOrEmail.trim();
@@ -35,6 +39,11 @@ export default async function AppLayout({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  await Promise.all([
+    syncOverdueCheques(supabase),
+    syncOverduePrelevements(supabase),
+  ]);
 
   const { data: roles } = await supabase
     .from("user_roles")
