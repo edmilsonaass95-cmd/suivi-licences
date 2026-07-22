@@ -3,14 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PlusIcon } from "lucide-react";
+import { PencilIcon } from "lucide-react";
 
-import { createPayment } from "@/app/(app)/joueurs/actions";
-import {
-  PAYMENT_MODE_LABELS,
-  DEFAULT_AMOUNT_BY_MODE,
-  type PaymentFormValues,
-} from "@/lib/joueurs/schemas";
+import { updatePayment } from "@/app/(app)/joueurs/actions";
+import { PAYMENT_MODE_LABELS, type PaymentFormValues } from "@/lib/joueurs/schemas";
 import {
   ChequesFields,
   EcheancesFields,
@@ -24,15 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -47,117 +37,125 @@ const SIMPLE_MODES: Mode[] = [
   "pass_sport",
 ];
 
-export function AddPaymentDialog({ playerId }: { playerId: string }) {
+export type EditablePayment = {
+  id: string;
+  mode: Mode;
+  amount: number;
+  note: string | null;
+  cheques: {
+    id: string;
+    montant: number;
+    date_encaissement: string;
+    banque: string | null;
+    numero_cheque: string | null;
+  }[];
+  prelevements: {
+    id: string;
+    montant: number;
+    date_prelevement: string;
+  }[];
+};
+
+export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("espece");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [cheques, setCheques] = useState<ChequeRow[]>([emptyCheque]);
-  const [echeances, setEcheances] = useState<EcheanceRow[]>([emptyEcheance]);
+  const [amount, setAmount] = useState(String(payment.amount));
+  const [note, setNote] = useState(payment.note ?? "");
+  const [cheques, setCheques] = useState<ChequeRow[]>(
+    payment.cheques.length > 0
+      ? payment.cheques.map((c) => ({
+          id: c.id,
+          montant: String(c.montant),
+          date_encaissement: c.date_encaissement,
+          banque: c.banque ?? "",
+          numero_cheque: c.numero_cheque ?? "",
+        }))
+      : [emptyCheque]
+  );
+  const [echeances, setEcheances] = useState<EcheanceRow[]>(
+    payment.prelevements.length > 0
+      ? payment.prelevements.map((e) => ({
+          id: e.id,
+          montant: String(e.montant),
+          date_prelevement: e.date_prelevement,
+        }))
+      : [emptyEcheance]
+  );
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
-
-  function resetForm() {
-    setMode("espece");
-    setAmount("");
-    setNote("");
-    setCheques([emptyCheque]);
-    setEcheances([emptyEcheance]);
-  }
-
-  function handleModeChange(next: Mode) {
-    setMode(next);
-    setAmount(DEFAULT_AMOUNT_BY_MODE[next]?.toString() ?? "");
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
 
     let values: unknown;
-    if (mode === "cheque") {
+    if (payment.mode === "cheque") {
       values = {
-        mode,
+        mode: payment.mode,
         note: note || undefined,
         cheques: cheques.map((c) => ({
+          id: c.id,
           montant: Number(c.montant),
           date_encaissement: c.date_encaissement,
           banque: c.banque || undefined,
           numero_cheque: c.numero_cheque || undefined,
         })),
       };
-    } else if (mode === "prelevement") {
+    } else if (payment.mode === "prelevement") {
       values = {
-        mode,
+        mode: payment.mode,
         note: note || undefined,
         echeances: echeances.map((row) => ({
+          id: row.id,
           montant: Number(row.montant),
           date_prelevement: row.date_prelevement,
         })),
       };
     } else {
-      values = { mode, amount: Number(amount), note: note || undefined };
+      values = {
+        mode: payment.mode,
+        amount: Number(amount),
+        note: note || undefined,
+      };
     }
 
-    const result = await createPayment(playerId, values);
+    const result = await updatePayment(payment.id, values);
     setSubmitting(false);
 
     if (result.error) {
-      toast.error("Impossible d'enregistrer le paiement", {
+      toast.error("Impossible de modifier le paiement", {
         description: result.error,
       });
       return;
     }
 
-    toast.success("Paiement enregistré");
-    resetForm();
+    toast.success("Paiement modifié");
     setOpen(false);
     router.refresh();
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) resetForm();
-      }}
-    >
-      <Button onClick={() => setOpen(true)}>
-        <PlusIcon />
-        Ajouter un paiement
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => setOpen(true)}
+        aria-label="Modifier le paiement"
+      >
+        <PencilIcon className="size-4" />
       </Button>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Ajouter un paiement</DialogTitle>
+          <DialogTitle>Modifier le paiement</DialogTitle>
+          <DialogDescription>
+            {PAYMENT_MODE_LABELS[payment.mode]}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Mode de paiement</Label>
-            <Select
-              value={mode}
-              onValueChange={(v) => handleModeChange(v as Mode)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {(v: string) => PAYMENT_MODE_LABELS[v as Mode]}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(PAYMENT_MODE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {SIMPLE_MODES.includes(mode) && (
+          {SIMPLE_MODES.includes(payment.mode) && (
             <div className="space-y-1.5">
-              <Label htmlFor="amount">Montant (€)</Label>
+              <Label htmlFor="edit-amount">Montant (€)</Label>
               <Input
-                id="amount"
+                id="edit-amount"
                 type="number"
                 step="0.01"
                 min="0.01"
@@ -168,18 +166,18 @@ export function AddPaymentDialog({ playerId }: { playerId: string }) {
             </div>
           )}
 
-          {mode === "cheque" && (
+          {payment.mode === "cheque" && (
             <ChequesFields rows={cheques} onChange={setCheques} />
           )}
 
-          {mode === "prelevement" && (
+          {payment.mode === "prelevement" && (
             <EcheancesFields rows={echeances} onChange={setEcheances} />
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="note">Note (facultatif)</Label>
+            <Label htmlFor="edit-note">Note (facultatif)</Label>
             <Textarea
-              id="note"
+              id="edit-note"
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -188,7 +186,7 @@ export function AddPaymentDialog({ playerId }: { playerId: string }) {
 
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Enregistrement..." : "Enregistrer le paiement"}
+              {submitting ? "Enregistrement..." : "Enregistrer"}
             </Button>
           </DialogFooter>
         </form>

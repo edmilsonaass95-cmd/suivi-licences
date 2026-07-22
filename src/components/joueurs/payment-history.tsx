@@ -8,6 +8,8 @@ import { updateChequeStatut } from "@/app/(app)/echeancier/actions";
 import { updatePrelevementStatut } from "@/app/(app)/prelevements/actions";
 import { PAYMENT_MODE_LABELS, type PaymentFormValues } from "@/lib/joueurs/schemas";
 import { formatDateFr } from "@/lib/date";
+import { EditPaymentDialog } from "@/components/joueurs/edit-payment-dialog";
+import { DeletePaymentButton } from "@/components/joueurs/delete-payment-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -126,9 +128,13 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                 {formatDateFr(payment.created_at)}
               </span>
             </div>
-            <span className="font-heading text-lg font-semibold">
-              {eur.format(payment.amount)}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="font-heading text-lg font-semibold">
+                {eur.format(payment.amount)}
+              </span>
+              <EditPaymentDialog payment={payment} />
+              <DeletePaymentButton paymentId={payment.id} />
+            </div>
           </div>
           {payment.note && (
             <p className="mt-1 text-sm text-muted-foreground">

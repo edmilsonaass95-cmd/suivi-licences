@@ -191,3 +191,134 @@ export async function createPayment(playerId: string, values: unknown) {
   revalidatePath("/joueurs");
   return { id: payment.id as string };
 }
+
+export async function updatePayment(paymentId: string, values: unknown) {
+  const parsed = paymentSchema.safeParse(values);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  }
+  const v = parsed.data;
+
+  const supabase = await createClient();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("payments")
+    .select("id, player_id, mode")
+    .eq("id", paymentId)
+    .single();
+
+  if (fetchError || !existing) {
+    return { error: fetchError?.message ?? "Paiement introuvable" };
+  }
+
+  if (existing.mode !== v.mode) {
+    return { error: "Le mode de paiement ne peut pas être modifié." };
+  }
+
+  const amount =
+    v.mode === "cheque"
+      ? v.cheques.reduce((sum, c) => sum + c.montant, 0)
+      : v.mode === "prelevement"
+        ? v.echeances.reduce((sum, e) => sum + e.montant, 0)
+        : v.amount;
+
+  const { error } = await supabase
+    .from("payments")
+    .update({ amount, note: v.note || null })
+    .eq("id", paymentId);
+
+  if (error) return { error: error.message };
+
+  if (v.mode === "cheque") {
+    const { data: existingCheques } = await supabase
+      .from("cheques")
+      .select("id")
+      .eq("payment_id", paymentId);
+    const existingIds = new Set((existingCheques ?? []).map((c) => c.id));
+    const keptIds = new Set(v.cheques.map((c) => c.id).filter(Boolean));
+
+    const toDelete = [...existingIds].filter((id) => !keptIds.has(id));
+    if (toDelete.length > 0) {
+      await supabase.from("cheques").delete().in("id", toDelete);
+    }
+
+    for (const [i, c] of v.cheques.entries()) {
+      const row = {
+        numero_ordre: i + 1,
+        montant: c.montant,
+        date_encaissement: c.date_encaissement,
+        banque: c.banque || null,
+        numero_cheque: c.numero_cheque || null,
+      };
+      if (c.id && existingIds.has(c.id)) {
+        await supabase.from("cheques").update(row).eq("id", c.id);
+      } else {
+        await supabase
+          .from("cheques")
+          .insert({ ...row, payment_id: paymentId });
+      }
+    }
+  }
+
+  if (v.mode === "prelevement") {
+    const { data: existingEcheances } = await supabase
+      .from("prelevements")
+      .select("id")
+      .eq("payment_id", paymentId);
+    const existingIds = new Set((existingEcheances ?? []).map((e) => e.id));
+    const keptIds = new Set(v.echeances.map((e) => e.id).filter(Boolean));
+
+    const toDelete = [...existingIds].filter((id) => !keptIds.has(id));
+    if (toDelete.length > 0) {
+      await supabase.from("prelevements").delete().in("id", toDelete);
+    }
+
+    for (const [i, e] of v.echeances.entries()) {
+      const row = {
+        numero_echeance: i + 1,
+        montant: e.montant,
+        date_prelevement: e.date_prelevement,
+      };
+      if (e.id && existingIds.has(e.id)) {
+        await supabase.from("prelevements").update(row).eq("id", e.id);
+      } else {
+        await supabase
+          .from("prelevements")
+          .insert({ ...row, payment_id: paymentId });
+      }
+    }
+  }
+
+  revalidatePath(`/joueurs/${existing.player_id}`);
+  revalidatePath("/joueurs");
+  revalidatePath("/echeancier");
+  revalidatePath("/prelevements");
+  return { success: true };
+}
+
+export async function deletePayment(paymentId: string) {
+  const supabase = await createClient();
+
+  const { data: payment, error: fetchError } = await supabase
+    .from("payments")
+    .select("player_id")
+    .eq("id", paymentId)
+    .single();
+
+  if (fetchError || !payment) {
+    return { error: fetchError?.message ?? "Paiement introuvable" };
+  }
+
+  const { error } = await supabase
+    .from("payments")
+    .delete()
+    .eq("id", paymentId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/joueurs/${payment.player_id}`);
+  revalidatePath("/joueurs");
+  revalidatePath("/echeancier");
+  revalidatePath("/prelevements");
+  return { success: true };
+}

@@ -72,6 +72,7 @@ export type PlayerEditFormInput = z.input<typeof playerEditSchema>;
 const montantPositif = z.coerce.number().positive("Le montant doit être positif");
 
 export const chequeItemSchema = z.object({
+  id: z.string().optional(),
   montant: montantPositif,
   date_encaissement: z.string().min(1, "Date obligatoire"),
   banque: z.string().optional(),
@@ -79,6 +80,7 @@ export const chequeItemSchema = z.object({
 });
 
 export const echeanceItemSchema = z.object({
+  id: z.string().optional(),
   montant: montantPositif,
   date_prelevement: z.string().min(1, "Date obligatoire"),
 });
