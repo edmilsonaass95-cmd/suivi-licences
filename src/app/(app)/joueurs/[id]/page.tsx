@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { AddPaymentDialog } from "@/components/joueurs/add-payment-dialog";
 import { EditPlayerDialog } from "@/components/joueurs/edit-player-dialog";
 import { PaymentHistory, type PaymentRow } from "@/components/joueurs/payment-history";
+import { AttachmentsSection } from "@/components/joueurs/attachments-section";
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
 
 const eur = new Intl.NumberFormat("fr-FR", {
@@ -25,23 +26,43 @@ export default async function PlayerDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: player }, { data: balance }, { data: payments }, { data: allPlayers }] =
-    await Promise.all([
-      supabase.from("players").select("*").eq("id", id).maybeSingle(),
-      supabase
-        .from("player_balances")
-        .select("*")
-        .eq("player_id", id)
-        .maybeSingle(),
-      supabase
-        .from("payments")
-        .select("*, cheques(*), prelevements(*)")
-        .eq("player_id", id)
-        .order("created_at", { ascending: false }),
-      supabase.from("players").select("id, nom, prenom").order("nom"),
-    ]);
+  const [
+    { data: player },
+    { data: balance },
+    { data: payments },
+    { data: allPlayers },
+    { data: attachments },
+    {
+      data: { user },
+    },
+  ] = await Promise.all([
+    supabase.from("players").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("player_balances")
+      .select("*")
+      .eq("player_id", id)
+      .maybeSingle(),
+    supabase
+      .from("payments")
+      .select("*, cheques(*), prelevements(*)")
+      .eq("player_id", id)
+      .order("created_at", { ascending: false }),
+    supabase.from("players").select("id, nom, prenom").order("nom"),
+    supabase
+      .from("attachments")
+      .select("id, filename, file_path, created_at")
+      .eq("player_id", id)
+      .order("created_at", { ascending: false }),
+    supabase.auth.getUser(),
+  ]);
 
   if (!player) notFound();
+
+  const { data: roles } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user?.id ?? "");
+  const isAdmin = roles?.some((r) => r.role === "admin") ?? false;
 
   const linkedPlayer = player.remise_lien_joueur_id
     ? (allPlayers ?? []).find((p) => p.id === player.remise_lien_joueur_id)
@@ -197,6 +218,14 @@ export default async function PlayerDetailPage({
 
       <h2 className="mb-3 text-lg font-semibold">Historique des paiements</h2>
       <PaymentHistory payments={paymentRows} />
+
+      <div className="mt-6">
+        <AttachmentsSection
+          playerId={player.id}
+          attachments={attachments ?? []}
+          isAdmin={isAdmin}
+        />
+      </div>
     </div>
   );
 }
