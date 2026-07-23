@@ -7,6 +7,12 @@ import { MoreHorizontalIcon } from "lucide-react";
 import { updateChequeStatut } from "@/app/(app)/echeancier/actions";
 import { updatePrelevementStatut } from "@/app/(app)/prelevements/actions";
 import { PAYMENT_MODE_LABELS, type PaymentFormValues } from "@/lib/joueurs/schemas";
+import {
+  CHEQUE_STATUT_LABEL,
+  PRELEVEMENT_STATUT_LABEL,
+  type ChequeStatut,
+  type PrelevementStatut,
+} from "@/lib/joueurs/statut-labels";
 import { formatDateFr } from "@/lib/date";
 import { EditPaymentDialog } from "@/components/joueurs/edit-payment-dialog";
 import { DeletePaymentButton } from "@/components/joueurs/delete-payment-button";
@@ -37,7 +43,7 @@ type Cheque = {
   numero_cheque: string | null;
   montant: number;
   date_encaissement: string;
-  statut: "a_encaisser" | "encaisse" | "impaye";
+  statut: ChequeStatut;
   banque: string | null;
 };
 
@@ -46,7 +52,7 @@ type Prelevement = {
   numero_echeance: number;
   montant: number;
   date_prelevement: string;
-  statut: "prevu" | "preleve" | "echec";
+  statut: PrelevementStatut;
 };
 
 export type PaymentRow = {
@@ -57,18 +63,6 @@ export type PaymentRow = {
   created_at: string;
   cheques: Cheque[];
   prelevements: Prelevement[];
-};
-
-const CHEQUE_STATUT_LABEL: Record<Cheque["statut"], string> = {
-  a_encaisser: "À encaisser",
-  encaisse: "Encaissé",
-  impaye: "Impayé",
-};
-
-const PRELEVEMENT_STATUT_LABEL: Record<Prelevement["statut"], string> = {
-  prevu: "Prévu",
-  preleve: "Prélevé",
-  echec: "Échec",
 };
 
 export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {

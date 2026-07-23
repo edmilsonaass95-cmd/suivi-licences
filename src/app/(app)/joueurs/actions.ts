@@ -14,6 +14,12 @@ import {
   resolveRemise,
 } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
+import {
+  CHEQUE_STATUT_LABEL,
+  PRELEVEMENT_STATUT_LABEL,
+  type ChequeStatut,
+  type PrelevementStatut,
+} from "@/lib/joueurs/statut-labels";
 
 export async function createPlayer(values: unknown) {
   const parsed = playerSchema.safeParse(values);
@@ -331,7 +337,9 @@ export async function getPaymentsForExport(filters?: {
   const supabase = await createClient();
   let query = supabase
     .from("payments")
-    .select("mode, amount, note, created_at, players(nom, prenom, sexe, date_naissance)")
+    .select(
+      "mode, amount, note, created_at, players(nom, prenom, sexe, date_naissance), cheques(statut), prelevements(statut)"
+    )
     .order("created_at", { ascending: false });
 
   if (filters?.mode && filters.mode !== "tous") {
@@ -352,12 +360,35 @@ export async function getPaymentsForExport(filters?: {
     const categorie = player
       ? getCategorieFFF(parseDateOnly(player.date_naissance), player.sexe, saisonStart)
       : null;
+
+    let statut = "Encaissé";
+    if (p.mode === "cheque") {
+      const labels = Array.from(
+        new Set(
+          (p.cheques as { statut: ChequeStatut }[]).map(
+            (c) => CHEQUE_STATUT_LABEL[c.statut]
+          )
+        )
+      );
+      statut = labels.join(" / ") || "—";
+    } else if (p.mode === "prelevement") {
+      const labels = Array.from(
+        new Set(
+          (p.prelevements as { statut: PrelevementStatut }[]).map(
+            (e) => PRELEVEMENT_STATUT_LABEL[e.statut]
+          )
+        )
+      );
+      statut = labels.join(" / ") || "—";
+    }
+
     return {
       joueur: player ? `${player.nom} ${player.prenom}` : "—",
       sexe: player?.sexe ?? null,
       categorie,
       mode: p.mode,
       amount: Number(p.amount),
+      statut,
       note: p.note,
       created_at: p.created_at,
     };

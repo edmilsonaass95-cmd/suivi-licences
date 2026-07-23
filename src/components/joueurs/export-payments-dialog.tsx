@@ -54,6 +54,7 @@ export function ExportPaymentsDialog({ categories }: { categories: string[] }) {
       Catégorie: p.categorie ?? "",
       Mode: PAYMENT_MODE_LABELS[p.mode as PaymentFormValues["mode"]],
       "Montant (€)": p.amount,
+      Statut: p.statut,
       Date: formatDateFr(p.created_at),
       Note: p.note ?? "",
     }));

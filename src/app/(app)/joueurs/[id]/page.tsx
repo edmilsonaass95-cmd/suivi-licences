@@ -11,6 +11,7 @@ import { AddPaymentDialog } from "@/components/joueurs/add-payment-dialog";
 import { EditPlayerDialog } from "@/components/joueurs/edit-player-dialog";
 import { PaymentHistory, type PaymentRow } from "@/components/joueurs/payment-history";
 import { AttachmentsSection } from "@/components/joueurs/attachments-section";
+import { ExportPlayerPdfButton } from "@/components/joueurs/export-player-pdf-button";
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
 
 const eur = new Intl.NumberFormat("fr-FR", {
@@ -77,6 +78,18 @@ export default async function PlayerDetailPage({
     getSaisonStart()
   );
 
+  const statutLabel =
+    licencePrice > 0 && paid >= licencePrice
+      ? "Payé"
+      : paid > 0
+        ? "Partiel"
+        : "Dû";
+  const remiseLabel = player.remise_motif
+    ? `${eur.format(Number(player.remise))} (${REMISE_MOTIF_LABELS[player.remise_motif as "parente" | "autre"]}${
+        linkedPlayer ? ` — ${linkedPlayer.nom} ${linkedPlayer.prenom}` : ""
+      })`
+    : "Aucune";
+
   const paymentRows: PaymentRow[] = (payments ?? []).map((p) => ({
     id: p.id,
     mode: p.mode,
@@ -122,6 +135,26 @@ export default async function PlayerDetailPage({
           </div>
         </div>
         <div className="flex gap-2">
+          <ExportPlayerPdfButton
+            player={{
+              nom: player.nom,
+              prenom: player.prenom,
+              sexe: player.sexe as "M" | "F",
+              categorie,
+              dateNaissance: formatDateFr(player.date_naissance),
+              email: player.email,
+              telephone: player.telephone,
+              ville: player.ville,
+              mute: player.mute,
+              remiseLabel,
+              notes: player.notes,
+              licencePrice,
+              paid,
+              solde,
+              statutLabel,
+            }}
+            payments={paymentRows}
+          />
           <EditPlayerDialog
             playerId={player.id}
             categorie={categorie}
