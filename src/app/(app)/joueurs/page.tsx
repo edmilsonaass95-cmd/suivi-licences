@@ -3,6 +3,7 @@ import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import { parseDateOnly } from "@/lib/date";
 import { AddPlayerDialog } from "@/components/joueurs/add-player-dialog";
 import { PlayersTable, type PlayerRow } from "@/components/joueurs/players-table";
+import { ExportPaymentsButton } from "@/components/joueurs/export-payments-button";
 
 export default async function JoueursPage() {
   const supabase = await createClient();
@@ -43,13 +44,16 @@ export default async function JoueursPage() {
           <h1 className="text-2xl font-semibold">Joueurs</h1>
           <p className="text-muted-foreground">{rows.length} joueur(s)</p>
         </div>
-        <AddPlayerDialog
-          players={(players ?? []).map((p) => ({
-            id: p.id,
-            nom: p.nom,
-            prenom: p.prenom,
-          }))}
-        />
+        <div className="flex gap-2">
+          <ExportPaymentsButton />
+          <AddPlayerDialog
+            players={(players ?? []).map((p) => ({
+              id: p.id,
+              nom: p.nom,
+              prenom: p.prenom,
+            }))}
+          />
+        </div>
       </div>
       <PlayersTable rows={rows} />
     </div>

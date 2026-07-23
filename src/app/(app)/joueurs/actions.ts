@@ -322,3 +322,30 @@ export async function deletePayment(paymentId: string) {
   revalidatePath("/prelevements");
   return { success: true };
 }
+
+export async function getPaymentsForExport() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("payments")
+    .select("mode, amount, note, created_at, players(nom, prenom)")
+    .order("created_at", { ascending: false });
+
+  if (error) return { error: error.message };
+
+  const rows = (data ?? []).map((p) => {
+    const playersRel = p.players as
+      | { nom: string; prenom: string }
+      | { nom: string; prenom: string }[]
+      | null;
+    const player = Array.isArray(playersRel) ? playersRel[0] : playersRel;
+    return {
+      joueur: player ? `${player.nom} ${player.prenom}` : "—",
+      mode: p.mode,
+      amount: Number(p.amount),
+      note: p.note,
+      created_at: p.created_at,
+    };
+  });
+
+  return { rows };
+}

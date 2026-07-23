@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { DownloadIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -19,6 +21,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { exportToExcel, todayStamp } from "@/lib/export-xlsx";
+
+function statutLabel(paid: number, expected: number) {
+  if (expected > 0 && paid >= expected) return "Payé";
+  if (paid > 0) return "Partiel";
+  return "Dû";
+}
 
 export type PlayerRow = {
   id: string;
@@ -36,10 +45,9 @@ const eur = new Intl.NumberFormat("fr-FR", {
 });
 
 function StatusBadge({ paid, expected }: { paid: number; expected: number }) {
-  if (expected > 0 && paid >= expected) {
-    return <Badge>Payé</Badge>;
-  }
-  if (paid > 0) {
+  const label = statutLabel(paid, expected);
+  if (label === "Payé") return <Badge>Payé</Badge>;
+  if (label === "Partiel") {
     return (
       <Badge className="border-transparent bg-amber-500 text-white">
         Partiel
@@ -73,9 +81,22 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
     return matchesSearch && matchesCategorie && matchesStatut;
   });
 
+  function handleExport() {
+    const exportRows = filtered.map((r) => ({
+      Nom: r.nom,
+      Prénom: r.prenom,
+      Catégorie: r.categorie,
+      "Prix licence (€)": r.licencePrice,
+      "Payé (€)": r.paid,
+      "Solde (€)": r.solde,
+      Statut: statutLabel(r.paid, r.licencePrice),
+    }));
+    exportToExcel(`joueurs-${todayStamp()}.xlsx`, "Joueurs", exportRows);
+  }
+
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           placeholder="Rechercher un joueur..."
           value={search}
@@ -114,6 +135,15 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
             <SelectItem value="du">Dû</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          type="button"
+          variant="outline"
+          className="ml-auto"
+          onClick={handleExport}
+        >
+          <DownloadIcon />
+          Exporter ({filtered.length})
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
