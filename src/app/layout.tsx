@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Sora, Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,6 +17,17 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Suivi des licences",
   description: "Gestion et suivi des paiements de licences du club",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Suivi des licences",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#064425",
 };
 
 export default function RootLayout({
