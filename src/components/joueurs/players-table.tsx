@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { exportToExcel, todayStamp } from "@/lib/export-xlsx";
+import { PLAYER_STATUT_LABEL } from "@/lib/joueurs/statut-labels";
 
 function statutLabel(paid: number, expected: number) {
   if (expected > 0 && paid >= expected) return "Payé";
@@ -57,14 +58,6 @@ function StatusBadge({ paid, expected }: { paid: number; expected: number }) {
   }
   return <Badge variant="destructive">Dû</Badge>;
 }
-
-const STATUT_LABELS: Record<string, string> = {
-  tous: "Tous statuts",
-  paye: "Payé",
-  partiel: "Partiel",
-  impaye: "Impayé",
-  reste_a_payer: "Reste à payer",
-};
 
 export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
   const [search, setSearch] = useState("");
@@ -152,11 +145,11 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
         <Select value={statut} onValueChange={(v) => setStatut(v ?? "tous")}>
           <SelectTrigger>
             <SelectValue>
-              {(v: string) => STATUT_LABELS[v] ?? STATUT_LABELS.tous}
+              {(v: string) => PLAYER_STATUT_LABEL[v] ?? PLAYER_STATUT_LABEL.tous}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(STATUT_LABELS).map(([value, label]) => (
+            {Object.entries(PLAYER_STATUT_LABEL).map(([value, label]) => (
               <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>

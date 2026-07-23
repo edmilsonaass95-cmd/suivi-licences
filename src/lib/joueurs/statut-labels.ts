@@ -12,3 +12,11 @@ export const PRELEVEMENT_STATUT_LABEL: Record<PrelevementStatut, string> = {
   preleve: "Prélevé",
   echec: "Échec",
 };
+
+export const PLAYER_STATUT_LABEL: Record<string, string> = {
+  tous: "Tous statuts",
+  paye: "Payé",
+  partiel: "Partiel",
+  impaye: "Impayé",
+  reste_a_payer: "Reste à payer",
+};

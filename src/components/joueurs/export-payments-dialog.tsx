@@ -6,6 +6,7 @@ import { DownloadIcon } from "lucide-react";
 
 import { getPaymentsForExport } from "@/app/(app)/joueurs/actions";
 import { PAYMENT_MODE_LABELS, type PaymentFormValues } from "@/lib/joueurs/schemas";
+import { PLAYER_STATUT_LABEL } from "@/lib/joueurs/statut-labels";
 import { formatDateFr } from "@/lib/date";
 import { exportToExcel, todayStamp } from "@/lib/export-xlsx";
 import { Button } from "@/components/ui/button";
@@ -37,10 +38,16 @@ export function ExportPaymentsDialog({ categories }: { categories: string[] }) {
   const [mode, setMode] = useState("tous");
   const [categorie, setCategorie] = useState("toutes");
   const [genre, setGenre] = useState("tous");
+  const [statutJoueur, setStatutJoueur] = useState("tous");
 
   async function handleExport() {
     setLoading(true);
-    const result = await getPaymentsForExport({ mode, categorie, genre });
+    const result = await getPaymentsForExport({
+      mode,
+      categorie,
+      genre,
+      statutJoueur,
+    });
     setLoading(false);
 
     if ("error" in result) {
@@ -55,6 +62,7 @@ export function ExportPaymentsDialog({ categories }: { categories: string[] }) {
       Mode: PAYMENT_MODE_LABELS[p.mode as PaymentFormValues["mode"]],
       "Montant (€)": p.amount,
       Statut: p.statut,
+      "Statut joueur": p.statutJoueurLabel,
       Date: formatDateFr(p.created_at),
       Note: p.note ?? "",
     }));
@@ -135,6 +143,28 @@ export function ExportPaymentsDialog({ categories }: { categories: string[] }) {
                 <SelectItem value="tous">Tous genres</SelectItem>
                 <SelectItem value="M">Masculin</SelectItem>
                 <SelectItem value="F">Féminin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Statut du joueur</Label>
+            <Select
+              value={statutJoueur}
+              onValueChange={(v) => setStatutJoueur(v ?? "tous")}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string) =>
+                    PLAYER_STATUT_LABEL[v] ?? PLAYER_STATUT_LABEL.tous
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(PLAYER_STATUT_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

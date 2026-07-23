@@ -21,6 +21,12 @@ import {
   type PrelevementStatut,
 } from "@/lib/joueurs/statut-labels";
 
+const STATUT_JOUEUR_LABEL: Record<string, string> = {
+  paye: "Payé",
+  partiel: "Partiel",
+  impaye: "Impayé",
+};
+
 export async function createPlayer(values: unknown) {
   const parsed = playerSchema.safeParse(values);
   if (!parsed.success) {
@@ -333,12 +339,13 @@ export async function getPaymentsForExport(filters?: {
   mode?: string;
   categorie?: string;
   genre?: string;
+  statutJoueur?: string;
 }) {
   const supabase = await createClient();
   let query = supabase
     .from("payments")
     .select(
-      "mode, amount, note, created_at, players(nom, prenom, sexe, date_naissance), cheques(statut), prelevements(statut)"
+      "player_id, mode, amount, note, created_at, players(nom, prenom, sexe, date_naissance, licence_price), cheques(statut), prelevements(statut)"
     )
     .order("created_at", { ascending: false });
 
@@ -350,16 +357,38 @@ export async function getPaymentsForExport(filters?: {
 
   if (error) return { error: error.message };
 
+  const playerIds = Array.from(
+    new Set((data ?? []).map((p) => p.player_id).filter(Boolean))
+  );
+  const { data: balances } = await supabase
+    .from("player_balances")
+    .select("player_id, paid")
+    .in("player_id", playerIds);
+  const paidByPlayer = new Map(
+    (balances ?? []).map((b) => [b.player_id, Number(b.paid)])
+  );
+
   const saisonStart = getSaisonStart();
   let rows = (data ?? []).map((p) => {
     const playersRel = p.players as
-      | { nom: string; prenom: string; sexe: "M" | "F"; date_naissance: string }
-      | { nom: string; prenom: string; sexe: "M" | "F"; date_naissance: string }[]
+      | { nom: string; prenom: string; sexe: "M" | "F"; date_naissance: string; licence_price: number }
+      | { nom: string; prenom: string; sexe: "M" | "F"; date_naissance: string; licence_price: number }[]
       | null;
     const player = Array.isArray(playersRel) ? playersRel[0] : playersRel;
     const categorie = player
       ? getCategorieFFF(parseDateOnly(player.date_naissance), player.sexe, saisonStart)
       : null;
+
+    const licencePrice = player ? Number(player.licence_price) : 0;
+    const paid = paidByPlayer.get(p.player_id) ?? 0;
+    const isSolde = licencePrice > 0 && paid >= licencePrice;
+    const statutJoueur = !player
+      ? null
+      : isSolde
+        ? "paye"
+        : paid > 0
+          ? "partiel"
+          : "impaye";
 
     let statut = "Encaissé";
     if (p.mode === "cheque") {
@@ -389,6 +418,8 @@ export async function getPaymentsForExport(filters?: {
       mode: p.mode,
       amount: Number(p.amount),
       statut,
+      statutJoueur,
+      statutJoueurLabel: statutJoueur ? STATUT_JOUEUR_LABEL[statutJoueur] : "—",
       note: p.note,
       created_at: p.created_at,
     };
@@ -399,6 +430,14 @@ export async function getPaymentsForExport(filters?: {
   }
   if (filters?.categorie && filters.categorie !== "toutes") {
     rows = rows.filter((r) => r.categorie === filters.categorie);
+  }
+  if (filters?.statutJoueur && filters.statutJoueur !== "tous") {
+    rows = rows.filter((r) => {
+      if (filters.statutJoueur === "reste_a_payer") {
+        return r.statutJoueur === "partiel" || r.statutJoueur === "impaye";
+      }
+      return r.statutJoueur === filters.statutJoueur;
+    });
   }
 
   return { rows };
