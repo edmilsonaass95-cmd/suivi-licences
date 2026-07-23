@@ -323,29 +323,52 @@ export async function deletePayment(paymentId: string) {
   return { success: true };
 }
 
-export async function getPaymentsForExport() {
+export async function getPaymentsForExport(filters?: {
+  mode?: string;
+  categorie?: string;
+  genre?: string;
+}) {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("payments")
-    .select("mode, amount, note, created_at, players(nom, prenom)")
+    .select("mode, amount, note, created_at, players(nom, prenom, sexe, date_naissance)")
     .order("created_at", { ascending: false });
+
+  if (filters?.mode && filters.mode !== "tous") {
+    query = query.eq("mode", filters.mode);
+  }
+
+  const { data, error } = await query;
 
   if (error) return { error: error.message };
 
-  const rows = (data ?? []).map((p) => {
+  const saisonStart = getSaisonStart();
+  let rows = (data ?? []).map((p) => {
     const playersRel = p.players as
-      | { nom: string; prenom: string }
-      | { nom: string; prenom: string }[]
+      | { nom: string; prenom: string; sexe: "M" | "F"; date_naissance: string }
+      | { nom: string; prenom: string; sexe: "M" | "F"; date_naissance: string }[]
       | null;
     const player = Array.isArray(playersRel) ? playersRel[0] : playersRel;
+    const categorie = player
+      ? getCategorieFFF(parseDateOnly(player.date_naissance), player.sexe, saisonStart)
+      : null;
     return {
       joueur: player ? `${player.nom} ${player.prenom}` : "—",
+      sexe: player?.sexe ?? null,
+      categorie,
       mode: p.mode,
       amount: Number(p.amount),
       note: p.note,
       created_at: p.created_at,
     };
   });
+
+  if (filters?.genre && filters.genre !== "tous") {
+    rows = rows.filter((r) => r.sexe === filters.genre);
+  }
+  if (filters?.categorie && filters.categorie !== "toutes") {
+    rows = rows.filter((r) => r.categorie === filters.categorie);
+  }
 
   return { rows };
 }

@@ -3,7 +3,7 @@ import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import { parseDateOnly } from "@/lib/date";
 import { AddPlayerDialog } from "@/components/joueurs/add-player-dialog";
 import { PlayersTable, type PlayerRow } from "@/components/joueurs/players-table";
-import { ExportPaymentsButton } from "@/components/joueurs/export-payments-button";
+import { ExportPaymentsDialog } from "@/components/joueurs/export-payments-dialog";
 
 export default async function JoueursPage() {
   const supabase = await createClient();
@@ -26,6 +26,7 @@ export default async function JoueursPage() {
       id: p.id,
       nom: p.nom,
       prenom: p.prenom,
+      sexe: p.sexe as "M" | "F",
       categorie: getCategorieFFF(
         parseDateOnly(p.date_naissance),
         p.sexe as "M" | "F",
@@ -37,6 +38,8 @@ export default async function JoueursPage() {
     };
   });
 
+  const categories = Array.from(new Set(rows.map((r) => r.categorie))).sort();
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -45,7 +48,7 @@ export default async function JoueursPage() {
           <p className="text-muted-foreground">{rows.length} joueur(s)</p>
         </div>
         <div className="flex gap-2">
-          <ExportPaymentsButton />
+          <ExportPaymentsDialog categories={categories} />
           <AddPlayerDialog
             players={(players ?? []).map((p) => ({
               id: p.id,

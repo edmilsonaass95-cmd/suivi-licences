@@ -33,6 +33,7 @@ export type PlayerRow = {
   id: string;
   nom: string;
   prenom: string;
+  sexe: "M" | "F";
   categorie: string;
   licencePrice: number;
   paid: number;
@@ -57,9 +58,18 @@ function StatusBadge({ paid, expected }: { paid: number; expected: number }) {
   return <Badge variant="destructive">Dû</Badge>;
 }
 
+const STATUT_LABELS: Record<string, string> = {
+  tous: "Tous statuts",
+  paye: "Payé",
+  partiel: "Partiel",
+  impaye: "Impayé",
+  reste_a_payer: "Reste à payer",
+};
+
 export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
   const [search, setSearch] = useState("");
   const [categorie, setCategorie] = useState("toutes");
+  const [genre, setGenre] = useState("tous");
   const [statut, setStatut] = useState("tous");
 
   const categories = useMemo(
@@ -73,18 +83,22 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
       .includes(search.toLowerCase());
     const matchesCategorie =
       categorie === "toutes" || r.categorie === categorie;
+    const matchesGenre = genre === "tous" || r.sexe === genre;
     const isSolde = r.licencePrice > 0 && r.paid >= r.licencePrice;
     const matchesStatut =
       statut === "tous" ||
-      (statut === "solde" && isSolde) ||
-      (statut === "du" && !isSolde);
-    return matchesSearch && matchesCategorie && matchesStatut;
+      (statut === "paye" && isSolde) ||
+      (statut === "partiel" && r.paid > 0 && !isSolde) ||
+      (statut === "impaye" && r.paid === 0) ||
+      (statut === "reste_a_payer" && !isSolde);
+    return matchesSearch && matchesCategorie && matchesGenre && matchesStatut;
   });
 
   function handleExport() {
     const exportRows = filtered.map((r) => ({
       Nom: r.nom,
       Prénom: r.prenom,
+      Genre: r.sexe,
       Catégorie: r.categorie,
       "Prix licence (€)": r.licencePrice,
       "Payé (€)": r.paid,
@@ -121,18 +135,32 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={statut} onValueChange={(v) => setStatut(v ?? "tous")}>
+        <Select value={genre} onValueChange={(v) => setGenre(v ?? "tous")}>
           <SelectTrigger>
             <SelectValue>
               {(v: string) =>
-                v === "tous" ? "Tous statuts" : v === "solde" ? "Soldé" : "Dû"
+                v === "tous" ? "Tous genres" : v === "M" ? "Masculin" : "Féminin"
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="tous">Tous statuts</SelectItem>
-            <SelectItem value="solde">Soldé</SelectItem>
-            <SelectItem value="du">Dû</SelectItem>
+            <SelectItem value="tous">Tous genres</SelectItem>
+            <SelectItem value="M">Masculin</SelectItem>
+            <SelectItem value="F">Féminin</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statut} onValueChange={(v) => setStatut(v ?? "tous")}>
+          <SelectTrigger>
+            <SelectValue>
+              {(v: string) => STATUT_LABELS[v] ?? STATUT_LABELS.tous}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(STATUT_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Button
