@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,6 +50,14 @@ function AuthPageContent() {
     <main className="flex min-h-screen items-center justify-center bg-muted p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
+          <Image
+            src="/logo.png"
+            alt="Logo du club"
+            width={72}
+            height={87}
+            className="mx-auto mb-2"
+            priority
+          />
           <CardTitle className="text-2xl">Suivi des licences</CardTitle>
           <CardDescription>
             Connecte-toi ou crée un compte pour accéder à l&apos;application.
