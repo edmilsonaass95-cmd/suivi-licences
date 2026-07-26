@@ -30,6 +30,7 @@ export default async function UsersPage() {
     fullName: p.full_name,
     createdAt: p.created_at,
     role: (roleByUser.get(p.id) ?? "viewer") as UserRow["role"],
+    disabled: p.disabled,
   }));
 
   return (

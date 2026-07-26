@@ -85,6 +85,26 @@ export async function createUser(values: {
   return { success: true };
 }
 
+export async function setUserDisabled(userId: string, disabled: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (disabled && user?.id === userId) {
+    return { error: "Vous ne pouvez pas désactiver votre propre compte." };
+  }
+
+  const { error } = await supabase.rpc("set_user_disabled", {
+    _user_id: userId,
+    _disabled: disabled,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/users");
+  return { success: true };
+}
+
 export async function updateUserRole(userId: string, role: Role) {
   if (!VALID_ROLES.includes(role)) {
     return { error: "Rôle invalide" };

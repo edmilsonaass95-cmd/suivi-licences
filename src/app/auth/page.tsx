@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,6 +36,16 @@ type SignupValues = z.infer<typeof signupSchema>;
 
 export default function AuthPage() {
   return (
+    <Suspense>
+      <AuthPageContent />
+    </Suspense>
+  );
+}
+
+function AuthPageContent() {
+  const disabled = useSearchParams().get("disabled") === "1";
+
+  return (
     <main className="flex min-h-screen items-center justify-center bg-muted p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
@@ -45,6 +55,11 @@ export default function AuthPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {disabled && (
+            <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              Ce compte a été désactivé. Contactez un administrateur.
+            </p>
+          )}
           <Tabs defaultValue="login">
             <TabsList className="w-full">
               <TabsTrigger value="login">Connexion</TabsTrigger>

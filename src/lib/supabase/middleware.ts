@@ -31,6 +31,22 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthRoute = request.nextUrl.pathname.startsWith("/auth");
 
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("disabled")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.disabled) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth";
+      url.search = "?disabled=1";
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";

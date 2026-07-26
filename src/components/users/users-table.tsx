@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { BanIcon, RotateCcwIcon } from "lucide-react";
 
-import { updateUserRole } from "@/app/(app)/users/actions";
+import { setUserDisabled, updateUserRole } from "@/app/(app)/users/actions";
 import { formatDateFr } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -22,6 +24,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export type Role = "admin" | "manager" | "viewer";
 
@@ -31,6 +44,7 @@ export type UserRow = {
   fullName: string | null;
   createdAt: string;
   role: Role;
+  disabled: boolean;
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -65,6 +79,23 @@ export function UsersTable({
     router.refresh();
   }
 
+  async function handleDisableToggle(userId: string, disabled: boolean) {
+    setPendingId(userId);
+    const result = await setUserDisabled(userId, disabled);
+    setPendingId(null);
+
+    if (result.error) {
+      toast.error(
+        disabled ? "Impossible de désactiver le compte" : "Impossible de réactiver le compte",
+        { description: result.error }
+      );
+      return;
+    }
+
+    toast.success(disabled ? "Compte désactivé" : "Compte réactivé");
+    router.refresh();
+  }
+
   return (
     <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
       <Table>
@@ -73,13 +104,15 @@ export function UsersTable({
             <TableHead>Utilisateur</TableHead>
             <TableHead>E-mail</TableHead>
             <TableHead>Inscrit le</TableHead>
+            <TableHead>Statut</TableHead>
             <TableHead>Rôle</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 Aucun utilisateur.
               </TableCell>
             </TableRow>
@@ -96,6 +129,13 @@ export function UsersTable({
               </TableCell>
               <TableCell className="text-muted-foreground">{r.email}</TableCell>
               <TableCell>{formatDateFr(r.createdAt)}</TableCell>
+              <TableCell>
+                {r.disabled ? (
+                  <Badge variant="destructive">Désactivé</Badge>
+                ) : (
+                  <Badge>Actif</Badge>
+                )}
+              </TableCell>
               <TableCell>
                 <Select
                   value={r.role}
@@ -121,6 +161,61 @@ export function UsersTable({
                     )}
                   </SelectContent>
                 </Select>
+              </TableCell>
+              <TableCell className="text-right">
+                {r.disabled ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pendingId === r.id}
+                    onClick={() => handleDisableToggle(r.id, false)}
+                  >
+                    <RotateCcwIcon />
+                    Réactiver
+                  </Button>
+                ) : r.id === currentUserId ? (
+                  <Button variant="outline" size="sm" disabled>
+                    <BanIcon />
+                    Désactiver
+                  </Button>
+                ) : (
+                  <AlertDialog>
+                    <AlertDialogTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={pendingId === r.id}
+                        />
+                      }
+                    >
+                      <BanIcon />
+                      Désactiver
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Désactiver ce compte ?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {r.fullName ?? r.email}{" "}
+                          ne pourra plus se connecter ni accéder à
+                          l&apos;application. Vous pourrez réactiver ce
+                          compte à tout moment.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                          variant="destructive"
+                          onClick={() => handleDisableToggle(r.id, true)}
+                        >
+                          Désactiver
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </TableCell>
             </TableRow>
           ))}
