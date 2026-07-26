@@ -89,7 +89,13 @@ function monthLabel(dateStr: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export function ChequesTable({ rows }: { rows: ChequeRow[] }) {
+export function ChequesTable({
+  rows,
+  canWrite,
+}: {
+  rows: ChequeRow[];
+  canWrite: boolean;
+}) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("tous");
   const router = useRouter();
 
@@ -163,7 +169,7 @@ export function ChequesTable({ rows }: { rows: ChequeRow[] }) {
                   <TableHead>Date d&apos;encaissement</TableHead>
                   <TableHead>Banque</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead />
+                  {canWrite && <TableHead />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -187,39 +193,41 @@ export function ChequesTable({ rows }: { rows: ChequeRow[] }) {
                     <TableCell>
                       <StatutBadge row={row} />
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
-                          <MoreHorizontalIcon className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            disabled={row.statut === "encaisse"}
-                            onClick={() =>
-                              handleStatutChange(row.id, "encaisse")
-                            }
-                          >
-                            Marquer encaissé
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={row.statut === "impaye"}
-                            onClick={() =>
-                              handleStatutChange(row.id, "impaye")
-                            }
-                          >
-                            Marquer impayé
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={row.statut === "a_encaisser"}
-                            onClick={() =>
-                              handleStatutChange(row.id, "a_encaisser")
-                            }
-                          >
-                            Remettre à encaisser
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {canWrite && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
+                            <MoreHorizontalIcon className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              disabled={row.statut === "encaisse"}
+                              onClick={() =>
+                                handleStatutChange(row.id, "encaisse")
+                              }
+                            >
+                              Marquer encaissé
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={row.statut === "impaye"}
+                              onClick={() =>
+                                handleStatutChange(row.id, "impaye")
+                              }
+                            >
+                              Marquer impayé
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={row.statut === "a_encaisser"}
+                              onClick={() =>
+                                handleStatutChange(row.id, "a_encaisser")
+                              }
+                            >
+                              Remettre à encaisser
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

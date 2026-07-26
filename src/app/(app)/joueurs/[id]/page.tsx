@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeftIcon } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import { formatDateFr, parseDateOnly } from "@/lib/date";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,9 +34,7 @@ export default async function PlayerDetailPage({
     { data: payments },
     { data: allPlayers },
     { data: attachments },
-    {
-      data: { user },
-    },
+    { isAdmin, canWrite },
   ] = await Promise.all([
     supabase.from("players").select("*").eq("id", id).maybeSingle(),
     supabase
@@ -54,16 +53,10 @@ export default async function PlayerDetailPage({
       .select("id, filename, file_path, created_at")
       .eq("player_id", id)
       .order("created_at", { ascending: false }),
-    supabase.auth.getUser(),
+    getCurrentUserRoles(),
   ]);
 
   if (!player) notFound();
-
-  const { data: roles } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user?.id ?? "");
-  const isAdmin = roles?.some((r) => r.role === "admin") ?? false;
 
   const linkedPlayer = player.remise_lien_joueur_id
     ? (allPlayers ?? []).find((p) => p.id === player.remise_lien_joueur_id)
@@ -155,25 +148,27 @@ export default async function PlayerDetailPage({
             }}
             payments={paymentRows}
           />
-          <EditPlayerDialog
-            playerId={player.id}
-            categorie={categorie}
-            mute={player.mute}
-            initial={{
-              email: player.email,
-              telephone: player.telephone,
-              ville: player.ville,
-              remise: Number(player.remise ?? 0),
-              remise_motif: player.remise_motif,
-              remise_lien_joueur_id: player.remise_lien_joueur_id,
-            }}
-            players={(allPlayers ?? []).map((p) => ({
-              id: p.id,
-              nom: p.nom,
-              prenom: p.prenom,
-            }))}
-          />
-          <AddPaymentDialog playerId={player.id} />
+          {canWrite && (
+            <EditPlayerDialog
+              playerId={player.id}
+              categorie={categorie}
+              mute={player.mute}
+              initial={{
+                email: player.email,
+                telephone: player.telephone,
+                ville: player.ville,
+                remise: Number(player.remise ?? 0),
+                remise_motif: player.remise_motif,
+                remise_lien_joueur_id: player.remise_lien_joueur_id,
+              }}
+              players={(allPlayers ?? []).map((p) => ({
+                id: p.id,
+                nom: p.nom,
+                prenom: p.prenom,
+              }))}
+            />
+          )}
+          {canWrite && <AddPaymentDialog playerId={player.id} />}
         </div>
       </div>
 
@@ -250,7 +245,7 @@ export default async function PlayerDetailPage({
       </Card>
 
       <h2 className="mb-3 text-lg font-semibold">Historique des paiements</h2>
-      <PaymentHistory payments={paymentRows} />
+      <PaymentHistory payments={paymentRows} canWrite={canWrite} />
 
       <div className="mt-6">
         <AttachmentsSection

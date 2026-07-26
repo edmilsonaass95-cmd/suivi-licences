@@ -1,12 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import { parseDateOnly } from "@/lib/date";
+import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { AddPlayerDialog } from "@/components/joueurs/add-player-dialog";
 import { PlayersTable, type PlayerRow } from "@/components/joueurs/players-table";
 import { ExportPaymentsDialog } from "@/components/joueurs/export-payments-dialog";
 
 export default async function JoueursPage() {
   const supabase = await createClient();
+  const { canWrite } = await getCurrentUserRoles();
   const [{ data: players }, { data: balances }] = await Promise.all([
     supabase.from("players").select("*").order("nom"),
     supabase.from("player_balances").select("*"),
@@ -49,13 +51,15 @@ export default async function JoueursPage() {
         </div>
         <div className="flex gap-2">
           <ExportPaymentsDialog categories={categories} />
-          <AddPlayerDialog
-            players={(players ?? []).map((p) => ({
-              id: p.id,
-              nom: p.nom,
-              prenom: p.prenom,
-            }))}
-          />
+          {canWrite && (
+            <AddPlayerDialog
+              players={(players ?? []).map((p) => ({
+                id: p.id,
+                nom: p.nom,
+                prenom: p.prenom,
+              }))}
+            />
+          )}
         </div>
       </div>
       <PlayersTable rows={rows} />

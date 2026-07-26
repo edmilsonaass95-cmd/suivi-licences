@@ -65,7 +65,13 @@ export type PaymentRow = {
   prelevements: Prelevement[];
 };
 
-export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
+export function PaymentHistory({
+  payments,
+  canWrite,
+}: {
+  payments: PaymentRow[];
+  canWrite: boolean;
+}) {
   const router = useRouter();
 
   const handleChequeStatut = async (
@@ -126,8 +132,12 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
               <span className="font-heading text-lg font-semibold">
                 {eur.format(payment.amount)}
               </span>
-              <EditPaymentDialog payment={payment} />
-              <DeletePaymentButton paymentId={payment.id} />
+              {canWrite && (
+                <>
+                  <EditPaymentDialog payment={payment} />
+                  <DeletePaymentButton paymentId={payment.id} />
+                </>
+              )}
             </div>
           </div>
           {payment.note && (
@@ -146,7 +156,7 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                   <TableHead>Date d&apos;encaissement</TableHead>
                   <TableHead>Banque</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead />
+                  {canWrite && <TableHead />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -168,37 +178,39 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                         {CHEQUE_STATUT_LABEL[c.statut]}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
-                          <MoreHorizontalIcon className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            disabled={c.statut === "encaisse"}
-                            onClick={() =>
-                              handleChequeStatut(c.id, "encaisse")
-                            }
-                          >
-                            Marquer encaissé
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={c.statut === "impaye"}
-                            onClick={() => handleChequeStatut(c.id, "impaye")}
-                          >
-                            Marquer impayé
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={c.statut === "a_encaisser"}
-                            onClick={() =>
-                              handleChequeStatut(c.id, "a_encaisser")
-                            }
-                          >
-                            Remettre à encaisser
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {canWrite && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
+                            <MoreHorizontalIcon className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              disabled={c.statut === "encaisse"}
+                              onClick={() =>
+                                handleChequeStatut(c.id, "encaisse")
+                              }
+                            >
+                              Marquer encaissé
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={c.statut === "impaye"}
+                              onClick={() => handleChequeStatut(c.id, "impaye")}
+                            >
+                              Marquer impayé
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={c.statut === "a_encaisser"}
+                              onClick={() =>
+                                handleChequeStatut(c.id, "a_encaisser")
+                              }
+                            >
+                              Remettre à encaisser
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -213,7 +225,7 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                   <TableHead className="text-right">Montant</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead />
+                  {canWrite && <TableHead />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -233,39 +245,41 @@ export function PaymentHistory({ payments }: { payments: PaymentRow[] }) {
                         {PRELEVEMENT_STATUT_LABEL[e.statut]}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
-                          <MoreHorizontalIcon className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            disabled={e.statut === "preleve"}
-                            onClick={() =>
-                              handlePrelevementStatut(e.id, "preleve")
-                            }
-                          >
-                            Marquer prélevé
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={e.statut === "echec"}
-                            onClick={() =>
-                              handlePrelevementStatut(e.id, "echec")
-                            }
-                          >
-                            Marquer échec
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={e.statut === "prevu"}
-                            onClick={() =>
-                              handlePrelevementStatut(e.id, "prevu")
-                            }
-                          >
-                            Remettre à venir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {canWrite && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
+                            <MoreHorizontalIcon className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              disabled={e.statut === "preleve"}
+                              onClick={() =>
+                                handlePrelevementStatut(e.id, "preleve")
+                              }
+                            >
+                              Marquer prélevé
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={e.statut === "echec"}
+                              onClick={() =>
+                                handlePrelevementStatut(e.id, "echec")
+                              }
+                            >
+                              Marquer échec
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={e.statut === "prevu"}
+                              onClick={() =>
+                                handlePrelevementStatut(e.id, "prevu")
+                              }
+                            >
+                              Remettre à venir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

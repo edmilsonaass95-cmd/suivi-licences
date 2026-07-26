@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { ChequesTable, type ChequeRow } from "@/components/echeancier/cheques-table";
 
 export default async function EcheancierPage() {
   const supabase = await createClient();
+  const { canWrite } = await getCurrentUserRoles();
 
   const { data } = await supabase
     .from("cheques")
@@ -30,7 +32,7 @@ export default async function EcheancierPage() {
         {rows.length} chèque(s), triés par date d&apos;encaissement.
       </p>
       <div className="mt-6">
-        <ChequesTable rows={rows} />
+        <ChequesTable rows={rows} canWrite={canWrite} />
       </div>
     </div>
   );

@@ -69,7 +69,13 @@ function monthLabel(dateStr: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export function PrelevementsTable({ rows }: { rows: PrelevementRow[] }) {
+export function PrelevementsTable({
+  rows,
+  canWrite,
+}: {
+  rows: PrelevementRow[];
+  canWrite: boolean;
+}) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("tous");
   const router = useRouter();
 
@@ -141,7 +147,7 @@ export function PrelevementsTable({ rows }: { rows: PrelevementRow[] }) {
                   <TableHead className="text-right">Montant</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead />
+                  {canWrite && <TableHead />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -163,39 +169,41 @@ export function PrelevementsTable({ rows }: { rows: PrelevementRow[] }) {
                     <TableCell>
                       <StatutBadge statut={row.statut} />
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
-                          <MoreHorizontalIcon className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            disabled={row.statut === "preleve"}
-                            onClick={() =>
-                              handleStatutChange(row.id, "preleve")
-                            }
-                          >
-                            Marquer prélevé
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={row.statut === "echec"}
-                            onClick={() =>
-                              handleStatutChange(row.id, "echec")
-                            }
-                          >
-                            Marquer échec
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={row.statut === "prevu"}
-                            onClick={() =>
-                              handleStatutChange(row.id, "prevu")
-                            }
-                          >
-                            Remettre à venir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {canWrite && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="flex size-7 items-center justify-center rounded-md hover:bg-accent">
+                            <MoreHorizontalIcon className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              disabled={row.statut === "preleve"}
+                              onClick={() =>
+                                handleStatutChange(row.id, "preleve")
+                              }
+                            >
+                              Marquer prélevé
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={row.statut === "echec"}
+                              onClick={() =>
+                                handleStatutChange(row.id, "echec")
+                              }
+                            >
+                              Marquer échec
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={row.statut === "prevu"}
+                              onClick={() =>
+                                handleStatutChange(row.id, "prevu")
+                              }
+                            >
+                              Remettre à venir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

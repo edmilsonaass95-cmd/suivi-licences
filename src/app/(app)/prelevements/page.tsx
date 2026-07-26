@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import {
   PrelevementsTable,
   type PrelevementRow,
@@ -6,6 +7,7 @@ import {
 
 export default async function PrelevementsPage() {
   const supabase = await createClient();
+  const { canWrite } = await getCurrentUserRoles();
 
   const { data } = await supabase
     .from("prelevements")
@@ -31,7 +33,7 @@ export default async function PrelevementsPage() {
         {rows.length} prélèvement(s), triés par date.
       </p>
       <div className="mt-6">
-        <PrelevementsTable rows={rows} />
+        <PrelevementsTable rows={rows} canWrite={canWrite} />
       </div>
     </div>
   );
