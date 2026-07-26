@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { UsersTable, type UserRow } from "@/components/users/users-table";
+import { AddUserDialog } from "@/components/users/add-user-dialog";
 
 export default async function UsersPage() {
   const supabase = await createClient();
@@ -33,13 +34,16 @@ export default async function UsersPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Utilisateurs</h1>
-      <p className="mt-2 text-muted-foreground">
-        {rows.length} utilisateur(s). Gérez les rôles d&apos;accès.
-      </p>
-      <div className="mt-6">
-        <UsersTable rows={rows} currentUserId={user?.id ?? ""} />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Utilisateurs</h1>
+          <p className="mt-2 text-muted-foreground">
+            {rows.length} utilisateur(s). Gérez les rôles d&apos;accès.
+          </p>
+        </div>
+        <AddUserDialog />
       </div>
+      <UsersTable rows={rows} currentUserId={user?.id ?? ""} />
     </div>
   );
 }

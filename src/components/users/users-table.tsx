@@ -33,7 +33,7 @@ export type UserRow = {
   role: Role;
 };
 
-const ROLE_LABELS: Record<Role, string> = {
+export const ROLE_LABELS: Record<Role, string> = {
   admin: "Administrateur",
   manager: "Gestionnaire",
   viewer: "Lecteur",
