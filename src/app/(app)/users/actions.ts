@@ -9,6 +9,13 @@ import { createClient } from "@/lib/supabase/server";
 const VALID_ROLES = ["admin", "manager", "viewer"] as const;
 type Role = (typeof VALID_ROLES)[number];
 
+function friendlyAuthEmailError(message: string) {
+  if (message.toLowerCase().includes("rate limit")) {
+    return "Limite d'envoi d'e-mails Supabase atteinte. Réessayez dans quelques minutes, ou configurez un serveur SMTP personnalisé dans Supabase (Project Settings > Authentication > SMTP Settings) pour lever cette limite.";
+  }
+  return message;
+}
+
 export async function createUser(values: {
   email: string;
   fullName: string;
@@ -52,12 +59,22 @@ export async function createUser(values: {
   });
 
   if (signUpError) {
-    return { error: signUpError.message };
+    return { error: friendlyAuthEmailError(signUpError.message) };
   }
 
   const newUserId = signUpData.user?.id;
   if (!newUserId || signUpData.user?.identities?.length === 0) {
     return { error: "Un compte existe déjà avec cet e-mail." };
+  }
+
+  // Le compte existe déjà à ce stade : on assigne le rôle même si l'envoi
+  // de l'e-mail échoue ensuite, pour ne pas laisser un compte mal configuré.
+  if (values.role !== "viewer") {
+    await supabase.from("user_roles").delete().eq("user_id", newUserId);
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .insert({ user_id: newUserId, role: values.role });
+    if (roleError) return { error: roleError.message };
   }
 
   const headersList = await headers();
@@ -69,16 +86,8 @@ export async function createUser(values: {
   });
   if (resetError) {
     return {
-      error: `Compte créé mais l'e-mail n'a pas pu être envoyé : ${resetError.message}`,
+      error: `Compte créé mais l'e-mail n'a pas pu être envoyé : ${friendlyAuthEmailError(resetError.message)}`,
     };
-  }
-
-  if (values.role !== "viewer") {
-    await supabase.from("user_roles").delete().eq("user_id", newUserId);
-    const { error: roleError } = await supabase
-      .from("user_roles")
-      .insert({ user_id: newUserId, role: values.role });
-    if (roleError) return { error: roleError.message };
   }
 
   revalidatePath("/users");
