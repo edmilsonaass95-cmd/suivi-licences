@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { DownloadIcon, Trash2Icon } from "lucide-react";
-import { deletePlayers } from "@/app/(app)/joueurs/actions";
+import { DownloadIcon, Trash2Icon, MailWarningIcon } from "lucide-react";
+import { deletePlayers, sendRelances } from "@/app/(app)/joueurs/actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,9 +77,11 @@ function StatusBadge({ paid, expected }: { paid: number; expected: number }) {
 export function PlayersTable({
   rows,
   isAdmin,
+  canWrite,
 }: {
   rows: PlayerRow[];
   isAdmin: boolean;
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -88,6 +90,7 @@ export function PlayersTable({
   const [statut, setStatut] = useState("tous");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [relancing, setRelancing] = useState(false);
 
   const categories = useMemo(
     () => Array.from(new Set(rows.map((r) => r.categorie))).sort(),
@@ -165,6 +168,38 @@ export function PlayersTable({
     router.refresh();
   }
 
+  async function handleRelance() {
+    setRelancing(true);
+    const result = await sendRelances(Array.from(selected));
+    setRelancing(false);
+
+    if ("error" in result) {
+      toast.error("Impossible d'envoyer les relances", {
+        description: result.error,
+      });
+      return;
+    }
+
+    const { sent, failed } = result;
+    if (sent > 0) {
+      toast.success(
+        sent > 1 ? `${sent} relances envoyées` : "Relance envoyée"
+      );
+    }
+    if (failed.length > 0) {
+      toast.error(
+        `${failed.length} relance(s) non envoyée(s)`,
+        {
+          description: failed
+            .map((f) => `${f.nom} ${f.prenom} : ${f.reason}`)
+            .join(", "),
+        }
+      );
+    }
+    setSelected(new Set());
+    router.refresh();
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -229,6 +264,37 @@ export function PlayersTable({
           <DownloadIcon />
           Exporter ({filtered.length})
         </Button>
+        {canWrite && selected.size > 0 && (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={<Button type="button" variant="outline" disabled={relancing} />}
+            >
+              <MailWarningIcon />
+              {relancing ? "Envoi..." : `Relancer (${selected.size})`}
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Envoyer une relance {selected.size > 1
+                    ? `à ces ${selected.size} joueurs`
+                    : "à ce joueur"}{" "}
+                  ?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Un e-mail rappelant leur solde à régler sera envoyé à
+                  l&apos;adresse enregistrée de chaque joueur sélectionné.
+                  Les joueurs déjà soldés ou sans e-mail seront ignorés.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction disabled={relancing} onClick={handleRelance}>
+                  {relancing ? "Envoi..." : "Envoyer"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
         {isAdmin && selected.size > 0 && (
           <AlertDialog>
             <AlertDialogTrigger
@@ -270,7 +336,7 @@ export function PlayersTable({
         <Table>
           <TableHeader>
             <TableRow>
-              {isAdmin && (
+              {canWrite && (
                 <TableHead className="w-10">
                   <Checkbox
                     checked={allFilteredSelected}
@@ -293,7 +359,7 @@ export function PlayersTable({
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={isAdmin ? 7 : 6}
+                  colSpan={canWrite ? 7 : 6}
                   className="text-center text-muted-foreground"
                 >
                   Aucun joueur trouvé.
@@ -302,7 +368,7 @@ export function PlayersTable({
             )}
             {filtered.map((r) => (
               <TableRow key={r.id} className="cursor-pointer">
-                {isAdmin && (
+                {canWrite && (
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={selected.has(r.id)}

@@ -62,7 +62,7 @@ export default async function JoueursPage() {
           )}
         </div>
       </div>
-      <PlayersTable rows={rows} isAdmin={isAdmin} />
+      <PlayersTable rows={rows} isAdmin={isAdmin} canWrite={canWrite} />
     </div>
   );
 }

@@ -20,6 +20,9 @@ import {
   type ChequeStatut,
   type PrelevementStatut,
 } from "@/lib/joueurs/statut-labels";
+import { getCurrentUserRoles } from "@/lib/auth/get-role";
+import { sendMail } from "@/lib/email";
+import { relanceEmailHtml } from "@/lib/joueurs/relance-email";
 
 const STATUT_JOUEUR_LABEL: Record<string, string> = {
   paye: "Payé",
@@ -53,6 +56,62 @@ export async function deletePlayers(playerIds: string[]) {
 
   revalidatePath("/joueurs");
   return { success: true };
+}
+
+export async function sendRelances(playerIds: string[]) {
+  if (playerIds.length === 0) return { error: "Aucun joueur sélectionné." };
+
+  const { canWrite } = await getCurrentUserRoles();
+  if (!canWrite) {
+    return { error: "Action réservée aux administrateurs et gestionnaires." };
+  }
+
+  const supabase = await createClient();
+  const [{ data: players }, { data: balances }] = await Promise.all([
+    supabase
+      .from("players")
+      .select("id, nom, prenom, email, licence_price")
+      .in("id", playerIds),
+    supabase.from("player_balances").select("*").in("player_id", playerIds),
+  ]);
+
+  const balanceByPlayer = new Map(
+    (balances ?? []).map((b) => [b.player_id, b])
+  );
+
+  let sent = 0;
+  const failed: { nom: string; prenom: string; reason: string }[] = [];
+
+  for (const p of players ?? []) {
+    const balance = balanceByPlayer.get(p.id);
+    const solde = Number(balance?.solde ?? p.licence_price);
+
+    if (!p.email) {
+      failed.push({ nom: p.nom, prenom: p.prenom, reason: "Pas d'e-mail" });
+      continue;
+    }
+    if (solde <= 0) {
+      failed.push({ nom: p.nom, prenom: p.prenom, reason: "Déjà soldé" });
+      continue;
+    }
+
+    try {
+      await sendMail({
+        to: p.email,
+        subject: "Rappel : solde de licence à régler",
+        html: relanceEmailHtml(p.prenom, solde),
+      });
+      sent++;
+    } catch (e) {
+      failed.push({
+        nom: p.nom,
+        prenom: p.prenom,
+        reason: e instanceof Error ? e.message : "Erreur d'envoi",
+      });
+    }
+  }
+
+  return { success: true, sent, failed };
 }
 
 export async function createPlayer(values: unknown) {
