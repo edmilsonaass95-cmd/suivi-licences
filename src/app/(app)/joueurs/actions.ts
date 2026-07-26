@@ -27,6 +27,34 @@ const STATUT_JOUEUR_LABEL: Record<string, string> = {
   impaye: "Impayé",
 };
 
+export async function deletePlayers(playerIds: string[]) {
+  if (playerIds.length === 0) return { error: "Aucun joueur sélectionné." };
+
+  const supabase = await createClient();
+
+  const { data: attachments } = await supabase
+    .from("attachments")
+    .select("file_path")
+    .in("player_id", playerIds);
+
+  if (attachments && attachments.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from("attachments")
+      .remove(attachments.map((a) => a.file_path));
+    if (storageError) return { error: storageError.message };
+  }
+
+  const { error } = await supabase
+    .from("players")
+    .delete()
+    .in("id", playerIds);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/joueurs");
+  return { success: true };
+}
+
 export async function createPlayer(values: unknown) {
   const parsed = playerSchema.safeParse(values);
   if (!parsed.success) {

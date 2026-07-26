@@ -2,10 +2,14 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { DownloadIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { DownloadIcon, Trash2Icon } from "lucide-react";
+import { deletePlayers } from "@/app/(app)/joueurs/actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -21,6 +25,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { exportToExcel, todayStamp } from "@/lib/export-xlsx";
 import { PLAYER_STATUT_LABEL } from "@/lib/joueurs/statut-labels";
 
@@ -59,11 +74,20 @@ function StatusBadge({ paid, expected }: { paid: number; expected: number }) {
   return <Badge variant="destructive">Dû</Badge>;
 }
 
-export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
+export function PlayersTable({
+  rows,
+  isAdmin,
+}: {
+  rows: PlayerRow[];
+  isAdmin: boolean;
+}) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [categorie, setCategorie] = useState("toutes");
   const [genre, setGenre] = useState("tous");
   const [statut, setStatut] = useState("tous");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const categories = useMemo(
     () => Array.from(new Set(rows.map((r) => r.categorie))).sort(),
@@ -99,6 +123,46 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
       Statut: statutLabel(r.paid, r.licencePrice),
     }));
     exportToExcel(`joueurs-${todayStamp()}.xlsx`, "Joueurs", exportRows);
+  }
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+
+  function toggleRow(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of filtered) {
+        if (checked) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const result = await deletePlayers(Array.from(selected));
+    setDeleting(false);
+
+    if (result.error) {
+      toast.error("Impossible de supprimer", { description: result.error });
+      return;
+    }
+
+    toast.success(
+      selected.size > 1 ? "Joueurs supprimés" : "Joueur supprimé"
+    );
+    setSelected(new Set());
+    router.refresh();
   }
 
   return (
@@ -165,12 +229,58 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
           <DownloadIcon />
           Exporter ({filtered.length})
         </Button>
+        {isAdmin && selected.size > 0 && (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={<Button type="button" variant="destructive" />}
+            >
+              <Trash2Icon />
+              Supprimer ({selected.size})
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Supprimer {selected.size > 1
+                    ? `ces ${selected.size} joueurs`
+                    : "ce joueur"}{" "}
+                  ?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Cette action est définitive : les joueurs, leurs paiements,
+                  chèques, prélèvements et pièces jointes seront supprimés
+                  sans possibilité de retour.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  disabled={deleting}
+                  onClick={handleDelete}
+                >
+                  {deleting ? "Suppression..." : "Supprimer"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
         <Table>
           <TableHeader>
             <TableRow>
+              {isAdmin && (
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allFilteredSelected}
+                    onCheckedChange={(checked) =>
+                      toggleAll(checked === true)
+                    }
+                    aria-label="Tout sélectionner"
+                  />
+                </TableHead>
+              )}
               <TableHead>Nom</TableHead>
               <TableHead>Catégorie</TableHead>
               <TableHead className="text-right">Prix licence</TableHead>
@@ -182,13 +292,27 @@ export function PlayersTable({ rows }: { rows: PlayerRow[] }) {
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell
+                  colSpan={isAdmin ? 7 : 6}
+                  className="text-center text-muted-foreground"
+                >
                   Aucun joueur trouvé.
                 </TableCell>
               </TableRow>
             )}
             {filtered.map((r) => (
               <TableRow key={r.id} className="cursor-pointer">
+                {isAdmin && (
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selected.has(r.id)}
+                      onCheckedChange={(checked) =>
+                        toggleRow(r.id, checked === true)
+                      }
+                      aria-label={`Sélectionner ${r.nom} ${r.prenom}`}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>
                   <Link
                     href={`/joueurs/${r.id}`}

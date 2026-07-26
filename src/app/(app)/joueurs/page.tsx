@@ -8,7 +8,7 @@ import { ExportPaymentsDialog } from "@/components/joueurs/export-payments-dialo
 
 export default async function JoueursPage() {
   const supabase = await createClient();
-  const { canWrite } = await getCurrentUserRoles();
+  const { canWrite, isAdmin } = await getCurrentUserRoles();
   const [{ data: players }, { data: balances }] = await Promise.all([
     supabase.from("players").select("*").order("nom"),
     supabase.from("player_balances").select("*"),
@@ -62,7 +62,7 @@ export default async function JoueursPage() {
           )}
         </div>
       </div>
-      <PlayersTable rows={rows} />
+      <PlayersTable rows={rows} isAdmin={isAdmin} />
     </div>
   );
 }
