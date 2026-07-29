@@ -2,6 +2,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateFr } from "@/lib/date";
 import { PAYMENT_MODE_LABELS } from "@/lib/joueurs/schemas";
+import { getCurrentUserRoles } from "@/lib/auth/get-role";
+import { ensurePlayerSeasons, getMaxKnownSaisonStart } from "@/lib/joueurs/seasons";
+import { getSelectableSaisons, saisonLabel } from "@/lib/saison-selection";
+import { getSelectedSaisonStart } from "@/lib/saison-selection-cookie";
+import { SeasonSelector } from "@/components/dashboard/season-selector";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +25,10 @@ const eur = new Intl.NumberFormat("fr-FR", {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const { canWrite } = await getCurrentUserRoles();
+  const maxSaisonStart = await getMaxKnownSaisonStart(supabase);
+  const selectedSaison = await getSelectedSaisonStart(maxSaisonStart);
+  const saisons = getSelectableSaisons(maxSaisonStart);
 
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
@@ -28,15 +37,20 @@ export default async function DashboardPage() {
     .slice(0, 10);
 
   const [
-    { data: balances },
+    { data: players },
     { data: payments },
     { data: upcomingCheques },
     { data: upcomingPrelevements },
     { data: impayesCheques },
     { data: echecPrelevements },
   ] = await Promise.all([
-    supabase.from("player_balances").select("*"),
-    supabase.from("payments").select("mode, amount"),
+    supabase
+      .from("players")
+      .select("id, date_naissance, sexe, mute, hors_sarcelles, remise"),
+    supabase
+      .from("payments")
+      .select("mode, amount")
+      .eq("saison_start", selectedSaison),
     supabase
       .from("cheques")
       .select("id, montant, date_encaissement, payments(players(id, nom, prenom))")
@@ -63,11 +77,41 @@ export default async function DashboardPage() {
       .order("date_prelevement"),
   ]);
 
-  const rows = balances ?? [];
-  const totalAttendu = rows.reduce((sum, r) => sum + Number(r.expected), 0);
-  const totalPaye = rows.reduce((sum, r) => sum + Number(r.paid), 0);
+  const [snapshotByPlayer, { data: paidTotals }] = await Promise.all([
+    ensurePlayerSeasons(
+      supabase,
+      (players ?? []).map((p) => ({
+        id: p.id,
+        date_naissance: p.date_naissance,
+        sexe: p.sexe as "M" | "F",
+        mute: p.mute,
+        hors_sarcelles: p.hors_sarcelles,
+        remise: Number(p.remise),
+      })),
+      selectedSaison,
+      { canWrite }
+    ),
+    supabase.rpc("saison_paid_totals", { _saison_start: selectedSaison }),
+  ]);
+
+  const paidByPlayer = new Map<string, number>(
+    (paidTotals ?? []).map((r: { player_id: string; paid: number }) => [
+      r.player_id,
+      Number(r.paid),
+    ])
+  );
+
+  const rows = (players ?? []).map((p) => {
+    const snapshot = snapshotByPlayer.get(p.id);
+    const expected = snapshot?.licence_price ?? 0;
+    const paid = paidByPlayer.get(p.id) ?? 0;
+    return { expected, paid, solde: expected - paid };
+  });
+
+  const totalAttendu = rows.reduce((sum, r) => sum + r.expected, 0);
+  const totalPaye = rows.reduce((sum, r) => sum + r.paid, 0);
   const totalReste = rows.reduce(
-    (sum, r) => sum + Math.max(Number(r.solde), 0),
+    (sum, r) => sum + Math.max(r.solde, 0),
     0
   );
 
@@ -75,10 +119,8 @@ export default async function DashboardPage() {
   let nbPartiel = 0;
   let nbImpaye = 0;
   for (const r of rows) {
-    const expected = Number(r.expected);
-    const paid = Number(r.paid);
-    if (expected > 0 && paid >= expected) nbPaye++;
-    else if (paid > 0) nbPartiel++;
+    if (r.expected > 0 && r.paid >= r.expected) nbPaye++;
+    else if (r.paid > 0) nbPartiel++;
     else nbImpaye++;
   }
 
@@ -148,10 +190,20 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Tableau de bord</h1>
-      <p className="mt-1 text-muted-foreground">
-        Vue d&apos;ensemble des licences et des paiements.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Tableau de bord</h1>
+          <p className="mt-1 text-muted-foreground">
+            Vue d&apos;ensemble des licences et des paiements — saison{" "}
+            {saisonLabel(selectedSaison)}.
+          </p>
+        </div>
+        <SeasonSelector
+          saisons={saisons}
+          selected={selectedSaison}
+          canAddSaison={canWrite}
+        />
+      </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card size="sm">

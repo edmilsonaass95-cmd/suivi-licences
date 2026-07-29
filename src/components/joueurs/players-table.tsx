@@ -54,6 +54,7 @@ export type PlayerRow = {
   licencePrice: number;
   paid: number;
   solde: number;
+  previousSolde?: number;
 };
 
 const eur = new Intl.NumberFormat("fr-FR", {
@@ -78,10 +79,14 @@ export function PlayersTable({
   rows,
   isAdmin,
   canWrite,
+  soldeLabel = "Solde",
+  previousSoldeLabel,
 }: {
   rows: PlayerRow[];
   isAdmin: boolean;
   canWrite: boolean;
+  soldeLabel?: string;
+  previousSoldeLabel?: string;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -122,7 +127,10 @@ export function PlayersTable({
       Catégorie: r.categorie,
       "Prix licence (€)": r.licencePrice,
       "Payé (€)": r.paid,
-      "Solde (€)": r.solde,
+      [`${soldeLabel} (€)`]: r.solde,
+      ...(previousSoldeLabel
+        ? { [`${previousSoldeLabel} (€)`]: r.previousSolde ?? 0 }
+        : {}),
       Statut: statutLabel(r.paid, r.licencePrice),
     }));
     exportToExcel(`joueurs-${todayStamp()}.xlsx`, "Joueurs", exportRows);
@@ -351,7 +359,12 @@ export function PlayersTable({
               <TableHead>Catégorie</TableHead>
               <TableHead className="text-right">Prix licence</TableHead>
               <TableHead className="text-right">Payé</TableHead>
-              <TableHead className="text-right">Solde</TableHead>
+              <TableHead className="text-right">{soldeLabel}</TableHead>
+              {previousSoldeLabel && (
+                <TableHead className="text-right">
+                  {previousSoldeLabel}
+                </TableHead>
+              )}
               <TableHead>Statut</TableHead>
             </TableRow>
           </TableHeader>
@@ -359,7 +372,9 @@ export function PlayersTable({
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={canWrite ? 7 : 6}
+                  colSpan={
+                    (canWrite ? 7 : 6) + (previousSoldeLabel ? 1 : 0)
+                  }
                   className="text-center text-muted-foreground"
                 >
                   Aucun joueur trouvé.
@@ -397,6 +412,11 @@ export function PlayersTable({
                 <TableCell className="text-right">
                   {eur.format(r.solde)}
                 </TableCell>
+                {previousSoldeLabel && (
+                  <TableCell className="text-right">
+                    {eur.format(r.previousSolde ?? 0)}
+                  </TableCell>
+                )}
                 <TableCell>
                   <StatusBadge paid={r.paid} expected={r.licencePrice} />
                 </TableCell>

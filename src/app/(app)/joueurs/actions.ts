@@ -23,6 +23,7 @@ import {
 import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { sendMail } from "@/lib/email";
 import { relanceEmailHtml } from "@/lib/joueurs/relance-email";
+import { upsertCurrentPlayerSeason } from "@/lib/joueurs/seasons";
 
 const STATUT_JOUEUR_LABEL: Record<string, string> = {
   paye: "Payé",
@@ -163,6 +164,15 @@ export async function createPlayer(values: unknown) {
     return { error: error.message };
   }
 
+  await upsertCurrentPlayerSeason(supabase, {
+    id: data.id,
+    date_naissance: v.date_naissance,
+    sexe: v.sexe,
+    mute: v.mute,
+    hors_sarcelles: horsSarcelles,
+    remise,
+  });
+
   revalidatePath("/joueurs");
   return { id: data.id as string };
 }
@@ -220,6 +230,15 @@ export async function updatePlayer(playerId: string, values: unknown) {
 
   if (error) return { error: error.message };
 
+  await upsertCurrentPlayerSeason(supabase, {
+    id: playerId,
+    date_naissance: player.date_naissance,
+    sexe: player.sexe as "M" | "F",
+    mute: player.mute,
+    hors_sarcelles: horsSarcelles,
+    remise,
+  });
+
   revalidatePath(`/joueurs/${playerId}`);
   revalidatePath("/joueurs");
   return { success: true };
@@ -252,6 +271,7 @@ export async function createPayment(playerId: string, values: unknown) {
       amount,
       note: v.note || null,
       created_by: user?.id,
+      saison_start: getSaisonStart(),
     })
     .select("id")
     .single();
