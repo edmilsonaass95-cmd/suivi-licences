@@ -3,9 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { BanIcon, RotateCcwIcon } from "lucide-react";
+import { BanIcon, CheckIcon, RotateCcwIcon } from "lucide-react";
 
-import { setUserDisabled, updateUserRole } from "@/app/(app)/users/actions";
+import {
+  setUserApproved,
+  setUserDisabled,
+  updateUserRole,
+} from "@/app/(app)/users/actions";
 import { formatDateFr } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +49,7 @@ export type UserRow = {
   createdAt: string;
   role: Role;
   disabled: boolean;
+  approved: boolean;
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -96,6 +101,22 @@ export function UsersTable({
     router.refresh();
   }
 
+  async function handleApprove(userId: string) {
+    setPendingId(userId);
+    const result = await setUserApproved(userId, true);
+    setPendingId(null);
+
+    if (result.error) {
+      toast.error("Impossible d'approuver le compte", {
+        description: result.error,
+      });
+      return;
+    }
+
+    toast.success("Compte approuvé");
+    router.refresh();
+  }
+
   return (
     <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
       <Table>
@@ -132,6 +153,10 @@ export function UsersTable({
               <TableCell>
                 {r.disabled ? (
                   <Badge variant="destructive">Désactivé</Badge>
+                ) : !r.approved ? (
+                  <Badge className="border-transparent bg-amber-500 text-white">
+                    En attente
+                  </Badge>
                 ) : (
                   <Badge>Actif</Badge>
                 )}
@@ -173,6 +198,54 @@ export function UsersTable({
                     <RotateCcwIcon />
                     Réactiver
                   </Button>
+                ) : !r.approved ? (
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingId === r.id}
+                      onClick={() => handleApprove(r.id)}
+                    >
+                      <CheckIcon />
+                      Approuver
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger
+                        render={
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={pendingId === r.id}
+                          />
+                        }
+                      >
+                        <BanIcon />
+                        Refuser
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Refuser cette demande de compte ?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {r.fullName ?? r.email} ne pourra pas accéder à
+                            l&apos;application. Vous pourrez revenir sur
+                            cette décision à tout moment depuis le statut
+                            &laquo; Désactivé &raquo;.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Annuler</AlertDialogCancel>
+                          <AlertDialogAction
+                            variant="destructive"
+                            onClick={() => handleDisableToggle(r.id, true)}
+                          >
+                            Refuser
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 ) : r.id === currentUserId ? (
                   <Button variant="outline" size="sm" disabled>
                     <BanIcon />

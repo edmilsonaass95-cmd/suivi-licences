@@ -77,6 +77,13 @@ export async function createUser(values: {
     if (roleError) return { error: roleError.message };
   }
 
+  // Un compte créé directement par un admin est utilisable immédiatement,
+  // pas bloqué en attente de validation comme une inscription libre-service.
+  await supabase.rpc("set_user_approved", {
+    _user_id: newUserId,
+    _approved: true,
+  });
+
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = host?.startsWith("localhost") ? "http" : "https";
@@ -107,6 +114,19 @@ export async function setUserDisabled(userId: string, disabled: boolean) {
   const { error } = await supabase.rpc("set_user_disabled", {
     _user_id: userId,
     _disabled: disabled,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/users");
+  return { success: true };
+}
+
+export async function setUserApproved(userId: string, approved: boolean) {
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("set_user_approved", {
+    _user_id: userId,
+    _approved: approved,
   });
   if (error) return { error: error.message };
 

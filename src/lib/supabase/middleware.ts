@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("disabled")
+      .select("disabled, approved")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -43,6 +43,14 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth";
       url.search = "?disabled=1";
+      return NextResponse.redirect(url);
+    }
+
+    if (profile && !profile.approved) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth";
+      url.search = "?pending=1";
       return NextResponse.redirect(url);
     }
   }

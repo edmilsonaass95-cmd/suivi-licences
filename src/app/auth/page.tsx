@@ -44,7 +44,9 @@ export default function AuthPage() {
 }
 
 function AuthPageContent() {
-  const disabled = useSearchParams().get("disabled") === "1";
+  const searchParams = useSearchParams();
+  const disabled = searchParams.get("disabled") === "1";
+  const pending = searchParams.get("pending") === "1";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted p-4">
@@ -67,6 +69,12 @@ function AuthPageContent() {
           {disabled && (
             <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               Ce compte a été désactivé. Contactez un administrateur.
+            </p>
+          )}
+          {pending && (
+            <p className="mb-4 rounded-md bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+              Ton compte est en attente de validation par un administrateur.
+              Tu pourras te connecter une fois ton accès approuvé.
             </p>
           )}
           <Tabs defaultValue="login">
@@ -135,7 +143,6 @@ function LoginForm() {
 }
 
 function SignupForm() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const {
@@ -152,27 +159,28 @@ function SignupForm() {
       password: values.password,
       options: { data: { full_name: values.fullName } },
     });
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       toast.error("Inscription impossible", { description: error.message });
       return;
     }
 
+    // Le compte doit être validé par un administrateur avant tout accès :
+    // même si une session a été créée, on se déconnecte immédiatement.
     if (data.session) {
-      router.push("/dashboard");
-      router.refresh();
-      return;
+      await supabase.auth.signOut();
     }
-
+    setLoading(false);
     setSubmitted(true);
   };
 
   if (submitted) {
     return (
       <p className="text-sm text-muted-foreground">
-        Compte créé. Vérifie ta boîte mail pour confirmer ton adresse, puis
-        connecte-toi depuis l&apos;onglet Connexion.
+        Compte créé. Il doit maintenant être validé par un administrateur
+        avant que tu puisses te connecter — tu seras informé(e) une fois ton
+        accès approuvé.
       </p>
     );
   }

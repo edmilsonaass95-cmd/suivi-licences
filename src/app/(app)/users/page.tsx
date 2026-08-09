@@ -31,6 +31,7 @@ export default async function UsersPage() {
     createdAt: p.created_at,
     role: (roleByUser.get(p.id) ?? "viewer") as UserRow["role"],
     disabled: p.disabled,
+    approved: p.approved,
   }));
 
   return (
