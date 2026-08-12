@@ -152,6 +152,7 @@ export default async function PlayerDetailPage({
             <EditPlayerDialog
               playerId={player.id}
               categorie={categorie}
+              sexe={player.sexe as "M" | "F"}
               mute={player.mute}
               initial={{
                 email: player.email,

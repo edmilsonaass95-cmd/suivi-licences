@@ -37,6 +37,7 @@ function computeSnapshot(
     categorie,
     licence_price: getLicencePrice(
       categorie,
+      player.sexe,
       player.mute,
       player.hors_sarcelles,
       player.remise

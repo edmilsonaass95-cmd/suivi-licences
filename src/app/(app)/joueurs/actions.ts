@@ -129,7 +129,13 @@ export async function createPlayer(values: unknown) {
   );
   const horsSarcelles = isHorsSarcelles(v.ville);
   const remise = resolveRemise(v.remise_motif, v.remise);
-  const licencePrice = getLicencePrice(categorie, v.mute, horsSarcelles, remise);
+  const licencePrice = getLicencePrice(
+    categorie,
+    v.sexe,
+    v.mute,
+    horsSarcelles,
+    remise
+  );
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -208,6 +214,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
   const remise = resolveRemise(v.remise_motif, v.remise);
   const licencePrice = getLicencePrice(
     categorie,
+    player.sexe as "M" | "F",
     player.mute,
     horsSarcelles,
     remise

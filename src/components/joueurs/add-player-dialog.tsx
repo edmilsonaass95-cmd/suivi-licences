@@ -85,6 +85,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
       categorie,
       prix: getLicencePrice(
         categorie,
+        sexe,
         !!mute,
         horsSarcelles,
         resolveRemise(remiseMotif, Number(remise))

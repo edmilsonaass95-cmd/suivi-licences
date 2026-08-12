@@ -38,12 +38,14 @@ const eur = new Intl.NumberFormat("fr-FR", {
 export function EditPlayerDialog({
   playerId,
   categorie,
+  sexe,
   mute,
   initial,
   players,
 }: {
   playerId: string;
   categorie: string;
+  sexe: "M" | "F";
   mute: boolean;
   initial: {
     email: string | null;
@@ -84,6 +86,7 @@ export function EditPlayerDialog({
   const horsSarcelles = isHorsSarcelles(ville ?? "");
   const prix = getLicencePrice(
     categorie,
+    sexe,
     mute,
     horsSarcelles,
     resolveRemise(remiseMotif, Number(remise))

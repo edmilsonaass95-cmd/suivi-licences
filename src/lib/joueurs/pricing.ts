@@ -61,6 +61,7 @@ export function resolveRemise(
 
 export function getLicencePrice(
   categorie: string,
+  sexe: "M" | "F",
   mute: boolean,
   horsSarcelles: boolean,
   remise = 0
@@ -69,7 +70,8 @@ export function getLicencePrice(
   if (!pricing) return 0;
   let price = pricing.base;
   if (mute) price += pricing.mutation;
-  if (horsSarcelles) price += SUPPLEMENT_HORS_SARCELLES;
+  // Le supplément hors Sarcelles ne s'applique pas aux licenciées féminines.
+  if (horsSarcelles && sexe !== "F") price += SUPPLEMENT_HORS_SARCELLES;
   price -= remise;
   return Math.max(0, Math.round(price * 100) / 100);
 }

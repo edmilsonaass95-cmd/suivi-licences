@@ -34,7 +34,7 @@ export async function importPlayers(rows: ImportedRow[]) {
       getSaisonStart()
     );
     const horsSarcelles = isHorsSarcelles(row.ville);
-    const licencePrice = getLicencePrice(categorie, false, horsSarcelles);
+    const licencePrice = getLicencePrice(categorie, row.sexe, false, horsSarcelles);
 
     const { error } = await supabase.from("players").insert({
       nom: row.nom,
