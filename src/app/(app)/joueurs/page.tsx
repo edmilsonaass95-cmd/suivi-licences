@@ -8,6 +8,7 @@ import {
 } from "@/lib/saison-selection";
 import { getSelectedSaisonStart } from "@/lib/saison-selection-cookie";
 import { AddPlayerDialog } from "@/components/joueurs/add-player-dialog";
+import { BulkAttachmentsDialog } from "@/components/joueurs/bulk-attachments-dialog";
 import { PlayersTable, type PlayerRow } from "@/components/joueurs/players-table";
 import { ExportPaymentsDialog } from "@/components/joueurs/export-payments-dialog";
 
@@ -107,6 +108,15 @@ export default async function JoueursPage() {
         </div>
         <div className="flex gap-2">
           <ExportPaymentsDialog categories={categories} />
+          {canWrite && (
+            <BulkAttachmentsDialog
+              players={(players ?? []).map((p) => ({
+                id: p.id,
+                nom: p.nom,
+                prenom: p.prenom,
+              }))}
+            />
+          )}
           {canWrite && (
             <AddPlayerDialog
               players={(players ?? []).map((p) => ({
