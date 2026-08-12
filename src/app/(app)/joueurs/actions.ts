@@ -24,6 +24,11 @@ import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { sendMail } from "@/lib/email";
 import { relanceEmailHtml } from "@/lib/joueurs/relance-email";
 import { upsertCurrentPlayerSeason } from "@/lib/joueurs/seasons";
+import { chunk } from "@/lib/chunk";
+
+// Au-delà de ce nombre d'identifiants, un filtre .in(...) risque de dépasser
+// la limite de longueur d'URL de Supabase/PostgREST ("Bad Request").
+const ID_BATCH_SIZE = 150;
 
 const STATUT_JOUEUR_LABEL: Record<string, string> = {
   paye: "Payé",
@@ -35,25 +40,29 @@ export async function deletePlayers(playerIds: string[]) {
   if (playerIds.length === 0) return { error: "Aucun joueur sélectionné." };
 
   const supabase = await createClient();
+  const idBatches = chunk(playerIds, ID_BATCH_SIZE);
 
-  const { data: attachments } = await supabase
-    .from("attachments")
-    .select("file_path")
-    .in("player_id", playerIds);
+  const filePaths: string[] = [];
+  for (const batch of idBatches) {
+    const { data: attachments, error } = await supabase
+      .from("attachments")
+      .select("file_path")
+      .in("player_id", batch);
+    if (error) return { error: error.message };
+    if (attachments) filePaths.push(...attachments.map((a) => a.file_path));
+  }
 
-  if (attachments && attachments.length > 0) {
+  for (const pathBatch of chunk(filePaths, ID_BATCH_SIZE)) {
     const { error: storageError } = await supabase.storage
       .from("attachments")
-      .remove(attachments.map((a) => a.file_path));
+      .remove(pathBatch);
     if (storageError) return { error: storageError.message };
   }
 
-  const { error } = await supabase
-    .from("players")
-    .delete()
-    .in("id", playerIds);
-
-  if (error) return { error: error.message };
+  for (const batch of idBatches) {
+    const { error } = await supabase.from("players").delete().in("id", batch);
+    if (error) return { error: error.message };
+  }
 
   revalidatePath("/joueurs");
   return { success: true };
@@ -68,16 +77,34 @@ export async function sendRelances(playerIds: string[]) {
   }
 
   const supabase = await createClient();
-  const [{ data: players }, { data: balances }] = await Promise.all([
-    supabase
-      .from("players")
-      .select("id, nom, prenom, email, licence_price")
-      .in("id", playerIds),
-    supabase.from("player_balances").select("*").in("player_id", playerIds),
-  ]);
+  const players: {
+    id: string;
+    nom: string;
+    prenom: string;
+    email: string | null;
+    licence_price: number;
+  }[] = [];
+  const balances: { player_id: string; solde: number }[] = [];
+
+  for (const batch of chunk(playerIds, ID_BATCH_SIZE)) {
+    const [
+      { data: playerBatch, error: playersError },
+      { data: balanceBatch, error: balancesError },
+    ] = await Promise.all([
+      supabase
+        .from("players")
+        .select("id, nom, prenom, email, licence_price")
+        .in("id", batch),
+      supabase.from("player_balances").select("*").in("player_id", batch),
+    ]);
+    if (playersError) return { error: playersError.message };
+    if (balancesError) return { error: balancesError.message };
+    if (playerBatch) players.push(...playerBatch);
+    if (balanceBatch) balances.push(...balanceBatch);
+  }
 
   const balanceByPlayer = new Map(
-    (balances ?? []).map((b) => [b.player_id, b])
+    balances.map((b) => [b.player_id, b])
   );
 
   let sent = 0;
@@ -474,12 +501,17 @@ export async function getPaymentsForExport(filters?: {
   const playerIds = Array.from(
     new Set((data ?? []).map((p) => p.player_id).filter(Boolean))
   );
-  const { data: balances } = await supabase
-    .from("player_balances")
-    .select("player_id, paid")
-    .in("player_id", playerIds);
+  const balances: { player_id: string; paid: number }[] = [];
+  for (const batch of chunk(playerIds, ID_BATCH_SIZE)) {
+    const { data: balanceBatch, error: balancesError } = await supabase
+      .from("player_balances")
+      .select("player_id, paid")
+      .in("player_id", batch);
+    if (balancesError) return { error: balancesError.message };
+    if (balanceBatch) balances.push(...balanceBatch);
+  }
   const paidByPlayer = new Map(
-    (balances ?? []).map((b) => [b.player_id, Number(b.paid)])
+    balances.map((b) => [b.player_id, Number(b.paid)])
   );
 
   const saisonStart = getSaisonStart();
