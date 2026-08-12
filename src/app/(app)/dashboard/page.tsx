@@ -46,7 +46,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("players")
-      .select("id, date_naissance, sexe, mute, hors_sarcelles, remise"),
+      .select("id, date_naissance, sexe, nature, hors_sarcelles, remise"),
     supabase
       .from("payments")
       .select("mode, amount")
@@ -84,7 +84,7 @@ export default async function DashboardPage() {
         id: p.id,
         date_naissance: p.date_naissance,
         sexe: p.sexe as "M" | "F",
-        mute: p.mute,
+        nature: p.nature,
         hors_sarcelles: p.hors_sarcelles,
         remise: Number(p.remise),
       })),

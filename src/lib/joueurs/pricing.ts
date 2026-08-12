@@ -41,6 +41,19 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
   "Vétéran F": { base: 200, mutation: 0 },
 };
 
+export const NATURES = [
+  "renouvellement",
+  "changement_inter_ligue",
+  "changement_intra_ligue",
+] as const;
+export type Nature = (typeof NATURES)[number];
+
+export const NATURE_LABELS: Record<Nature, string> = {
+  renouvellement: "Renouvellement",
+  changement_inter_ligue: "Changement de club inter ligue",
+  changement_intra_ligue: "Changement de club dans la ligue",
+};
+
 const SUPPLEMENT_HORS_SARCELLES = 20;
 
 export const REMISE_PARENTE = 20;
@@ -62,14 +75,14 @@ export function resolveRemise(
 export function getLicencePrice(
   categorie: string,
   sexe: "M" | "F",
-  mute: boolean,
+  nature: Nature,
   horsSarcelles: boolean,
   remise = 0
 ): number {
   const pricing = LICENCE_PRICING[categorie];
   if (!pricing) return 0;
   let price = pricing.base;
-  if (mute) price += pricing.mutation;
+  if (nature !== "renouvellement") price += pricing.mutation;
   // Le supplément hors Sarcelles ne s'applique pas aux licenciées féminines.
   if (horsSarcelles && sexe !== "F") price += SUPPLEMENT_HORS_SARCELLES;
   price -= remise;

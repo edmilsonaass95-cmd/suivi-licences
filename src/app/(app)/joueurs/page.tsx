@@ -36,7 +36,7 @@ export default async function JoueursPage() {
     id: p.id,
     date_naissance: p.date_naissance,
     sexe: p.sexe as "M" | "F",
-    mute: p.mute,
+    nature: p.nature,
     hors_sarcelles: p.hors_sarcelles,
     remise: Number(p.remise),
   }));

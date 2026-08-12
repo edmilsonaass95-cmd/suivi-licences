@@ -14,6 +14,7 @@ import { PaymentHistory, type PaymentRow } from "@/components/joueurs/payment-hi
 import { AttachmentsSection } from "@/components/joueurs/attachments-section";
 import { ExportPlayerPdfButton } from "@/components/joueurs/export-player-pdf-button";
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
+import { NATURE_LABELS, type Nature } from "@/lib/joueurs/pricing";
 
 const eur = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -138,7 +139,7 @@ export default async function PlayerDetailPage({
               email: player.email,
               telephone: player.telephone,
               ville: player.ville,
-              mute: player.mute,
+              nature: player.nature as Nature,
               remiseLabel,
               notes: player.notes,
               licencePrice,
@@ -153,8 +154,8 @@ export default async function PlayerDetailPage({
               playerId={player.id}
               categorie={categorie}
               sexe={player.sexe as "M" | "F"}
-              mute={player.mute}
               initial={{
+                nature: player.nature as Nature,
                 email: player.email,
                 telephone: player.telephone,
                 ville: player.ville,
@@ -223,8 +224,8 @@ export default async function PlayerDetailPage({
             {player.ville ?? "—"}
           </p>
           <p>
-            <span className="text-muted-foreground">Muté : </span>
-            {player.mute ? "Oui" : "Non"}
+            <span className="text-muted-foreground">Nature : </span>
+            {NATURE_LABELS[player.nature as Nature]}
           </p>
           <p>
             <span className="text-muted-foreground">Remise : </span>

@@ -16,12 +16,22 @@ import {
 import {
   getLicencePrice,
   isHorsSarcelles,
+  NATURE_LABELS,
+  NATURES,
   resolveRemise,
+  type Nature,
 } from "@/lib/joueurs/pricing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RemiseFields, type PlayerOption } from "@/components/joueurs/remise-fields";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -39,15 +49,14 @@ export function EditPlayerDialog({
   playerId,
   categorie,
   sexe,
-  mute,
   initial,
   players,
 }: {
   playerId: string;
   categorie: string;
   sexe: "M" | "F";
-  mute: boolean;
   initial: {
+    nature: Nature;
     email: string | null;
     telephone: string | null;
     ville: string;
@@ -69,6 +78,7 @@ export function EditPlayerDialog({
   } = useForm<PlayerEditFormInput>({
     resolver: zodResolver(playerEditSchema),
     defaultValues: {
+      nature: initial.nature,
       email: initial.email ?? "",
       telephone: initial.telephone ?? "",
       ville: initial.ville,
@@ -79,6 +89,7 @@ export function EditPlayerDialog({
   });
 
   const ville = watch("ville");
+  const nature = (watch("nature") ?? "renouvellement") as Nature;
   const remiseMotif = (watch("remise_motif") ?? "aucune") as RemiseMotif;
   const remise = watch("remise") ?? 0;
   const remiseLienJoueurId = watch("remise_lien_joueur_id");
@@ -87,7 +98,7 @@ export function EditPlayerDialog({
   const prix = getLicencePrice(
     categorie,
     sexe,
-    mute,
+    nature,
     horsSarcelles,
     resolveRemise(remiseMotif, Number(remise))
   );
@@ -137,6 +148,26 @@ export function EditPlayerDialog({
           <div className="space-y-1.5">
             <Label htmlFor="telephone">Téléphone</Label>
             <Input id="telephone" {...register("telephone")} />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Nature</Label>
+            <Select
+              value={nature}
+              onValueChange={(v) => setValue("nature", v as Nature)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string) => NATURE_LABELS[v as Nature]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {NATURES.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {NATURE_LABELS[n]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="col-span-2 space-y-1.5">
             <Label htmlFor="ville">Ville</Label>

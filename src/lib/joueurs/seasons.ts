@@ -1,13 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCategorieFFF, getSaisonStart, type Sexe } from "@/lib/categorie-fff";
-import { getLicencePrice } from "@/lib/joueurs/pricing";
+import { getLicencePrice, type Nature } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 
 export type PlayerAttributes = {
   id: string;
   date_naissance: string;
   sexe: Sexe;
-  mute: boolean;
+  nature: Nature;
   hors_sarcelles: boolean;
   remise: number;
 };
@@ -17,7 +17,7 @@ export type PlayerSeasonSnapshot = {
   saison_start: number;
   categorie: string;
   licence_price: number;
-  mute: boolean;
+  nature: Nature;
   hors_sarcelles: boolean;
   remise: number;
 };
@@ -38,11 +38,11 @@ function computeSnapshot(
     licence_price: getLicencePrice(
       categorie,
       player.sexe,
-      player.mute,
+      player.nature,
       player.hors_sarcelles,
       player.remise
     ),
-    mute: player.mute,
+    nature: player.nature,
     hors_sarcelles: player.hors_sarcelles,
     remise: player.remise,
   };
@@ -64,7 +64,7 @@ export async function ensurePlayerSeasons(
   const { data: existing } = await supabase
     .from("player_seasons")
     .select(
-      "player_id, saison_start, categorie, licence_price, mute, hors_sarcelles, remise"
+      "player_id, saison_start, categorie, licence_price, nature, hors_sarcelles, remise"
     )
     .eq("saison_start", saisonStart)
     .in(

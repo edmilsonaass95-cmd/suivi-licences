@@ -159,7 +159,7 @@ export async function createPlayer(values: unknown) {
   const licencePrice = getLicencePrice(
     categorie,
     v.sexe,
-    v.mute,
+    v.nature,
     horsSarcelles,
     remise
   );
@@ -175,7 +175,7 @@ export async function createPlayer(values: unknown) {
       email: v.email || null,
       telephone: v.telephone || null,
       ville: v.ville,
-      mute: v.mute,
+      nature: v.nature,
       hors_sarcelles: horsSarcelles,
       remise,
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
@@ -201,7 +201,7 @@ export async function createPlayer(values: unknown) {
     id: data.id,
     date_naissance: v.date_naissance,
     sexe: v.sexe,
-    mute: v.mute,
+    nature: v.nature,
     hors_sarcelles: horsSarcelles,
     remise,
   });
@@ -224,7 +224,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
   const supabase = await createClient();
   const { data: player, error: fetchError } = await supabase
     .from("players")
-    .select("date_naissance, sexe, mute")
+    .select("date_naissance, sexe")
     .eq("id", playerId)
     .single();
 
@@ -242,7 +242,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
   const licencePrice = getLicencePrice(
     categorie,
     player.sexe as "M" | "F",
-    player.mute,
+    v.nature,
     horsSarcelles,
     remise
   );
@@ -253,6 +253,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
       email: v.email || null,
       telephone: v.telephone || null,
       ville: v.ville,
+      nature: v.nature,
       hors_sarcelles: horsSarcelles,
       remise,
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
@@ -268,7 +269,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
     id: playerId,
     date_naissance: player.date_naissance,
     sexe: player.sexe as "M" | "F",
-    mute: player.mute,
+    nature: v.nature,
     hors_sarcelles: horsSarcelles,
     remise,
   });

@@ -13,14 +13,16 @@ import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import {
   getLicencePrice,
   isHorsSarcelles,
+  NATURE_LABELS,
+  NATURES,
   resolveRemise,
+  type Nature,
 } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { RemiseFields, type PlayerOption } from "@/components/joueurs/remise-fields";
 import {
   Select,
@@ -57,7 +59,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
     resolver: zodResolver(playerSchema),
     defaultValues: {
       sexe: "M",
-      mute: false,
+      nature: "renouvellement",
       ville: "Sarcelles",
       remise_motif: "aucune",
       remise: 0,
@@ -67,7 +69,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
 
   const dateNaissance = watch("date_naissance");
   const sexe = watch("sexe");
-  const mute = watch("mute");
+  const nature = (watch("nature") ?? "renouvellement") as Nature;
   const ville = watch("ville");
   const remiseMotif = watch("remise_motif") ?? "aucune";
   const remise = watch("remise") ?? 0;
@@ -86,7 +88,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
       prix: getLicencePrice(
         categorie,
         sexe,
-        !!mute,
+        nature,
         horsSarcelles,
         resolveRemise(remiseMotif, Number(remise))
       ),
@@ -205,16 +207,25 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
             )}
           </div>
 
-          <div className="col-span-2 flex flex-col gap-2 rounded-lg border border-border p-3">
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={!!mute}
-                onCheckedChange={(checked) =>
-                  setValue("mute", checked === true)
-                }
-              />
-              Joueur muté (transféré d&apos;un autre club)
-            </label>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Nature</Label>
+            <Select
+              value={nature}
+              onValueChange={(v) => setValue("nature", v as Nature)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string) => NATURE_LABELS[v as Nature]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {NATURES.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {NATURE_LABELS[n]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <RemiseFields
