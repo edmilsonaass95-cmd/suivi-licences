@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -9,6 +9,7 @@ import {
   CheckIcon,
   XIcon,
   Trash2Icon,
+  TriangleAlertIcon,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -54,10 +55,16 @@ type Row = {
   error?: string;
 };
 
+function normalizeFilename(filename: string): string {
+  return filename.trim().toLowerCase();
+}
+
 export function BulkAttachmentsDialog({
   players,
+  existingFilenamesByPlayer,
 }: {
   players: MatchablePlayer[];
+  existingFilenamesByPlayer: Record<string, string[]>;
 }) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
@@ -171,6 +178,20 @@ export function BulkAttachmentsDialog({
 
   const importableCount = rows.filter((r) => r.playerId).length;
 
+  const duplicateFlags = useMemo(() => {
+    const seenInBatch = new Map<string, number>();
+    return rows.map((row) => {
+      if (!row.playerId) return false;
+      const key = `${row.playerId}|${normalizeFilename(row.file.name)}`;
+      const alreadyExists = (existingFilenamesByPlayer[row.playerId] ?? []).some(
+        (f) => normalizeFilename(f) === normalizeFilename(row.file.name)
+      );
+      const duplicateInBatch = seenInBatch.has(key);
+      seenInBatch.set(key, (seenInBatch.get(key) ?? 0) + 1);
+      return alreadyExists || duplicateInBatch;
+    });
+  }, [rows, existingFilenamesByPlayer]);
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <Button type="button" variant="outline" onClick={() => setOpen(true)}>
@@ -265,6 +286,13 @@ export function BulkAttachmentsDialog({
                       {row.status === "error" && (
                         <p className="mt-1 text-xs text-destructive">
                           {row.error}
+                        </p>
+                      )}
+                      {row.status !== "error" && duplicateFlags[i] && (
+                        <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                          <TriangleAlertIcon className="size-3 shrink-0" />
+                          Doublon : un fichier du même nom existe déjà pour
+                          ce joueur.
                         </p>
                       )}
                     </TableCell>

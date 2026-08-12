@@ -19,10 +19,18 @@ export default async function JoueursPage() {
   const selectedSaison = await getSelectedSaisonStart(maxSaisonStart);
   const previousSaison =
     selectedSaison > FIRST_SAISON_START ? selectedSaison - 1 : null;
-  const { data: players } = await supabase
-    .from("players")
-    .select("*")
-    .order("nom");
+  const [{ data: players }, { data: existingAttachments }] = await Promise.all([
+    supabase.from("players").select("*").order("nom"),
+    canWrite
+      ? supabase.from("attachments").select("player_id, filename")
+      : Promise.resolve({ data: [] as { player_id: string; filename: string }[] }),
+  ]);
+
+  const existingFilenamesByPlayer: Record<string, string[]> = {};
+  for (const a of existingAttachments ?? []) {
+    if (!a.player_id) continue;
+    (existingFilenamesByPlayer[a.player_id] ??= []).push(a.filename);
+  }
 
   const playerAttributes = (players ?? []).map((p) => ({
     id: p.id,
@@ -115,6 +123,7 @@ export default async function JoueursPage() {
                 nom: p.nom,
                 prenom: p.prenom,
               }))}
+              existingFilenamesByPlayer={existingFilenamesByPlayer}
             />
           )}
           {canWrite && (

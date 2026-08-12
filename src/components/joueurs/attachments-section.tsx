@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { UploadIcon, DownloadIcon, Trash2Icon, PaperclipIcon } from "lucide-react";
@@ -11,6 +11,7 @@ import {
   deleteAttachment,
 } from "@/app/(app)/joueurs/attachments-actions";
 import { formatDateFr } from "@/lib/date";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -44,8 +45,35 @@ export function AttachmentsSection({
 }) {
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [pendingDuplicate, setPendingDuplicate] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  function isDuplicateFilename(filename: string) {
+    const normalized = filename.trim().toLowerCase();
+    return attachments.some((a) => a.filename.trim().toLowerCase() === normalized);
+  }
+
+  const duplicateAttachmentIds = useMemo(() => {
+    const countByName = new Map<string, number>();
+    for (const a of attachments) {
+      const key = a.filename.trim().toLowerCase();
+      countByName.set(key, (countByName.get(key) ?? 0) + 1);
+    }
+    return new Set(
+      attachments
+        .filter((a) => (countByName.get(a.filename.trim().toLowerCase()) ?? 0) > 1)
+        .map((a) => a.id)
+    );
+  }, [attachments]);
+
+  function onFilePicked(file: File) {
+    if (isDuplicateFilename(file.name)) {
+      setPendingDuplicate(file);
+      return;
+    }
+    handleFileSelected(file);
+  }
 
   async function handleFileSelected(file: File) {
     if (file.size > MAX_SIZE_BYTES) {
@@ -130,7 +158,7 @@ export function AttachmentsSection({
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleFileSelected(file);
+            if (file) onFilePicked(file);
             e.target.value = "";
           }}
         />
@@ -146,6 +174,34 @@ export function AttachmentsSection({
         </Button>
       </div>
 
+      <AlertDialog
+        open={pendingDuplicate !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingDuplicate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fichier déjà présent</AlertDialogTitle>
+            <AlertDialogDescription>
+              Un fichier nommé « {pendingDuplicate?.name} » existe déjà pour
+              ce joueur. L&apos;ajouter quand même ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDuplicate) handleFileSelected(pendingDuplicate);
+                setPendingDuplicate(null);
+              }}
+            >
+              Ajouter quand même
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {attachments.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Aucune pièce jointe pour le moment.
@@ -160,6 +216,14 @@ export function AttachmentsSection({
               <div className="flex min-w-0 items-center gap-2">
                 <PaperclipIcon className="size-4 shrink-0 text-muted-foreground" />
                 <span className="truncate">{a.filename}</span>
+                {duplicateAttachmentIds.has(a.id) && (
+                  <Badge
+                    variant="outline"
+                    className="shrink-0 border-amber-500 text-amber-600 dark:text-amber-400"
+                  >
+                    Doublon
+                  </Badge>
+                )}
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {formatDateFr(a.created_at)}
                 </span>
