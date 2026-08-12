@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { normalizeKey } from "@/lib/joueurs/import-parsing";
 import { ImportForm } from "@/components/import/import-form";
 
 export default async function ImportPage() {
@@ -29,20 +28,20 @@ export default async function ImportPage() {
     .from("players")
     .select("nom, prenom, date_naissance");
 
-  const existingKeys = (players ?? []).map((p) =>
-    normalizeKey(p.nom, p.prenom, p.date_naissance)
-  );
-
   return (
     <div>
       <h1 className="text-2xl font-semibold">Import de joueurs</h1>
       <p className="mt-2 text-muted-foreground">
         Importe une liste de joueurs depuis un fichier CSV ou Excel. Les
-        doublons (même nom, prénom et date de naissance) sont détectés
-        automatiquement et ignorés.
+        doublons certains (même nom, prénom et date de naissance) sont
+        détectés automatiquement et ignorés. Les homonymes probables (même
+        nom, prénom et année de naissance, mais date exacte différente) sont
+        signalés « À vérifier » et ne sont pas importés automatiquement : il
+        faut cocher « Pas un doublon, importer quand même » après
+        vérification manuelle pour les inclure.
       </p>
       <div className="mt-6">
-        <ImportForm existingKeys={existingKeys} />
+        <ImportForm existingPlayers={players ?? []} />
       </div>
     </div>
   );

@@ -140,6 +140,20 @@ export function normalizeKey(
   return `${nom.trim().toLowerCase()}|${prenom.trim().toLowerCase()}|${dateNaissance}`;
 }
 
+/**
+ * Clé plus large que normalizeKey : ne compare que l'année de naissance,
+ * pas la date exacte. Sert à repérer les homonymes probables (même nom,
+ * prénom et année) même quand la date précise diffère d'une saisie à
+ * l'autre, sans les considérer comme un doublon certain.
+ */
+export function normalizeYearKey(
+  nom: string,
+  prenom: string,
+  dateNaissance: string
+): string {
+  return `${nom.trim().toLowerCase()}|${prenom.trim().toLowerCase()}|${dateNaissance.slice(0, 4)}`;
+}
+
 export function mapRow(
   raw: Record<string, unknown>,
   mapping: Partial<Record<keyof ImportedRow, string>>

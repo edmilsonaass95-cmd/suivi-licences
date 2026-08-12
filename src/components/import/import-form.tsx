@@ -10,11 +10,14 @@ import {
   detectColumnMapping,
   mapRow,
   normalizeKey,
+  normalizeYearKey,
   parseSpreadsheet,
   type ImportedRow,
 } from "@/lib/joueurs/import-parsing";
+import { formatDateFr } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -24,14 +27,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+type ExistingPlayer = { nom: string; prenom: string; date_naissance: string };
+
 type PreviewRow = {
   data: ImportedRow | null;
   errors: string[];
   isDuplicate: boolean;
+  yearDuplicateDates: string[] | null;
+  forceImport: boolean;
   key: string | null;
 };
 
-export function ImportForm({ existingKeys }: { existingKeys: string[] }) {
+export function ImportForm({
+  existingPlayers,
+}: {
+  existingPlayers: ExistingPlayer[];
+}) {
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -44,7 +55,18 @@ export function ImportForm({ existingKeys }: { existingKeys: string[] }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const existingSet = new Set(existingKeys);
+  const existingSet = new Set(
+    existingPlayers.map((p) =>
+      normalizeKey(p.nom, p.prenom, p.date_naissance)
+    )
+  );
+  const existingYearMap = new Map<string, string[]>();
+  for (const p of existingPlayers) {
+    const yearKey = normalizeYearKey(p.nom, p.prenom, p.date_naissance);
+    const dates = existingYearMap.get(yearKey) ?? [];
+    dates.push(p.date_naissance);
+    existingYearMap.set(yearKey, dates);
+  }
 
   const handleFile = async (file: File) => {
     setParsing(true);
@@ -54,10 +76,18 @@ export function ImportForm({ existingKeys }: { existingKeys: string[] }) {
       const mapping = detectColumnMapping(headers);
 
       const seenInFile = new Set<string>();
+      const seenYearInFile = new Map<string, string[]>();
       const preview: PreviewRow[] = rawRows.map((raw) => {
         const parsed = mapRow(raw, mapping);
         if (!parsed.data) {
-          return { data: null, errors: parsed.errors, isDuplicate: false, key: null };
+          return {
+            data: null,
+            errors: parsed.errors,
+            isDuplicate: false,
+            yearDuplicateDates: null,
+            forceImport: false,
+            key: null,
+          };
         }
         const key = normalizeKey(
           parsed.data.nom,
@@ -66,7 +96,33 @@ export function ImportForm({ existingKeys }: { existingKeys: string[] }) {
         );
         const isDuplicate = existingSet.has(key) || seenInFile.has(key);
         seenInFile.add(key);
-        return { data: parsed.data, errors: [], isDuplicate, key };
+
+        let yearDuplicateDates: string[] | null = null;
+        const yearKey = normalizeYearKey(
+          parsed.data.nom,
+          parsed.data.prenom,
+          parsed.data.date_naissance
+        );
+        if (!isDuplicate) {
+          const collisions = [
+            ...(existingYearMap.get(yearKey) ?? []),
+            ...(seenYearInFile.get(yearKey) ?? []),
+          ];
+          if (collisions.length > 0) yearDuplicateDates = collisions;
+        }
+        seenYearInFile.set(yearKey, [
+          ...(seenYearInFile.get(yearKey) ?? []),
+          parsed.data.date_naissance,
+        ]);
+
+        return {
+          data: parsed.data,
+          errors: [],
+          isDuplicate,
+          yearDuplicateDates,
+          forceImport: false,
+          key,
+        };
       });
 
       setRows(preview);
@@ -80,7 +136,18 @@ export function ImportForm({ existingKeys }: { existingKeys: string[] }) {
     }
   };
 
-  const importable = rows.filter((r) => r.data && !r.isDuplicate);
+  const importable = rows.filter(
+    (r) =>
+      r.data && !r.isDuplicate && (!r.yearDuplicateDates || r.forceImport)
+  );
+
+  const toggleForceImport = (index: number) => {
+    setRows((prev) =>
+      prev.map((r, i) =>
+        i === index ? { ...r, forceImport: !r.forceImport } : r
+      )
+    );
+  };
 
   const handleImport = async () => {
     setImporting(true);
@@ -135,6 +202,21 @@ export function ImportForm({ existingKeys }: { existingKeys: string[] }) {
               {rows.filter((r) => r.data && r.isDuplicate).length} doublon(s)
               ignoré(s)
             </Badge>
+            <Badge
+              variant="outline"
+              className="border-amber-500 text-amber-600 dark:text-amber-400"
+            >
+              {
+                rows.filter(
+                  (r) =>
+                    r.data &&
+                    !r.isDuplicate &&
+                    r.yearDuplicateDates &&
+                    !r.forceImport
+                ).length
+              }{" "}
+              à vérifier manuellement (non importé)
+            </Badge>
             <Badge variant="destructive">
               {rows.filter((r) => !r.data).length} ligne(s) invalide(s)
             </Badge>
@@ -169,6 +251,34 @@ export function ImportForm({ existingKeys }: { existingKeys: string[] }) {
                         <Badge className="border-transparent bg-amber-500 text-white">
                           Ignoré (doublon)
                         </Badge>
+                      ) : row.yearDuplicateDates ? (
+                        <div className="space-y-1">
+                          <Badge
+                            variant="outline"
+                            className={
+                              row.forceImport
+                                ? "border-transparent bg-primary text-primary-foreground"
+                                : "border-amber-500 text-amber-600 dark:text-amber-400"
+                            }
+                          >
+                            {row.forceImport
+                              ? "Sera importé"
+                              : "À vérifier — non importé"}
+                          </Badge>
+                          <p className="text-xs text-muted-foreground">
+                            Homonyme déjà présent, né(e) le{" "}
+                            {row.yearDuplicateDates
+                              .map((d) => formatDateFr(d))
+                              .join(", ")}
+                          </p>
+                          <label className="flex items-center gap-1.5 text-xs">
+                            <Checkbox
+                              checked={row.forceImport}
+                              onCheckedChange={() => toggleForceImport(i)}
+                            />
+                            Pas un doublon, importer quand même
+                          </label>
+                        </div>
                       ) : (
                         <Badge>À importer</Badge>
                       )}
