@@ -6,6 +6,7 @@ import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { ensurePlayerSeasons, getMaxKnownSaisonStart } from "@/lib/joueurs/seasons";
 import { getSelectableSaisons, saisonLabel } from "@/lib/saison-selection";
 import { getSelectedSaisonStart } from "@/lib/saison-selection-cookie";
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 import { SeasonSelector } from "@/components/dashboard/season-selector";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -44,9 +45,13 @@ export default async function DashboardPage() {
     { data: impayesCheques },
     { data: echecPrelevements },
   ] = await Promise.all([
-    supabase
-      .from("players")
-      .select("id, date_naissance, sexe, nature, hors_sarcelles, remise"),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("players")
+        .select("id, date_naissance, sexe, nature, hors_sarcelles, remise")
+        .order("id")
+        .range(from, to)
+    ),
     supabase
       .from("payments")
       .select("mode, amount")

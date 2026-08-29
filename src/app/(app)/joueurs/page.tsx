@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { ensurePlayerSeasons, getMaxKnownSaisonStart } from "@/lib/joueurs/seasons";
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 import {
   FIRST_SAISON_START,
   saisonLabel,
@@ -20,10 +21,20 @@ export default async function JoueursPage() {
   const previousSaison =
     selectedSaison > FIRST_SAISON_START ? selectedSaison - 1 : null;
   const [{ data: players }, { data: existingAttachments }] = await Promise.all([
-    supabase.from("players").select("*").order("nom"),
+    fetchAllRows((from, to) =>
+      supabase.from("players").select("*").order("nom").range(from, to)
+    ),
     canWrite
-      ? supabase.from("attachments").select("player_id, filename")
-      : Promise.resolve({ data: [] as { player_id: string; filename: string }[] }),
+      ? fetchAllRows((from, to) =>
+          supabase
+            .from("attachments")
+            .select("player_id, filename")
+            .range(from, to)
+        )
+      : Promise.resolve({
+          data: [] as { player_id: string; filename: string }[],
+          error: null,
+        }),
   ]);
 
   const existingFilenamesByPlayer: Record<string, string[]> = {};

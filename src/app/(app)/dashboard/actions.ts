@@ -7,6 +7,7 @@ import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { ensurePlayerSeasons, getMaxKnownSaisonStart } from "@/lib/joueurs/seasons";
 import { FIRST_SAISON_START } from "@/lib/saison-selection";
 import { SAISON_COOKIE } from "@/lib/saison-selection-cookie";
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 
 function setSaisonCookie(
   store: Awaited<ReturnType<typeof cookies>>,
@@ -51,9 +52,13 @@ export async function addNextSaison() {
   const maxSaisonStart = await getMaxKnownSaisonStart(supabase);
   const nextSaison = maxSaisonStart + 1;
 
-  const { data: players, error } = await supabase
-    .from("players")
-    .select("id, date_naissance, sexe, nature, hors_sarcelles, remise");
+  const { data: players, error } = await fetchAllRows((from, to) =>
+    supabase
+      .from("players")
+      .select("id, date_naissance, sexe, nature, hors_sarcelles, remise")
+      .order("id")
+      .range(from, to)
+  );
 
   if (error) return { error: error.message };
 

@@ -5,19 +5,32 @@ import {
   type PrelevementRow,
 } from "@/components/prelevements/prelevements-table";
 import { ImportPrelevementsDialog } from "@/components/prelevements/import-prelevements-dialog";
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 
 export default async function PrelevementsPage() {
   const supabase = await createClient();
   const { canWrite } = await getCurrentUserRoles();
 
   const [{ data }, { data: players }] = await Promise.all([
-    supabase
-      .from("prelevements")
-      .select("*, payments(player_id, players(id, nom, prenom))")
-      .order("date_prelevement"),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("prelevements")
+        .select("*, payments(player_id, players(id, nom, prenom))")
+        .order("date_prelevement")
+        .range(from, to)
+    ),
     canWrite
-      ? supabase.from("players").select("id, nom, prenom").order("nom")
-      : Promise.resolve({ data: [] as { id: string; nom: string; prenom: string }[] }),
+      ? fetchAllRows((from, to) =>
+          supabase
+            .from("players")
+            .select("id, nom, prenom")
+            .order("nom")
+            .range(from, to)
+        )
+      : Promise.resolve({
+          data: [] as { id: string; nom: string; prenom: string }[],
+          error: null,
+        }),
   ]);
 
   const rows: PrelevementRow[] = (data ?? []).map((p) => ({

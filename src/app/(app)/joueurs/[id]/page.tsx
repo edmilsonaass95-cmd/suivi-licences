@@ -15,6 +15,7 @@ import { AttachmentsSection } from "@/components/joueurs/attachments-section";
 import { ExportPlayerPdfButton } from "@/components/joueurs/export-player-pdf-button";
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
 import { NATURE_LABELS, type Nature } from "@/lib/joueurs/pricing";
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 
 const eur = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -48,7 +49,9 @@ export default async function PlayerDetailPage({
       .select("*, cheques(*), prelevements(*)")
       .eq("player_id", id)
       .order("created_at", { ascending: false }),
-    supabase.from("players").select("id, nom, prenom").order("nom"),
+    fetchAllRows((from, to) =>
+      supabase.from("players").select("id, nom, prenom").order("nom").range(from, to)
+    ),
     supabase
       .from("attachments")
       .select("id, filename, file_path, created_at")

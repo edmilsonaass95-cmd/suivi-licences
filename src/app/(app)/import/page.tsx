@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ImportForm } from "@/components/import/import-form";
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 
 export default async function ImportPage() {
   const supabase = await createClient();
@@ -24,9 +25,13 @@ export default async function ImportPage() {
     );
   }
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("nom, prenom, date_naissance");
+  const { data: players } = await fetchAllRows((from, to) =>
+    supabase
+      .from("players")
+      .select("nom, prenom, date_naissance")
+      .order("id")
+      .range(from, to)
+  );
 
   return (
     <div>
