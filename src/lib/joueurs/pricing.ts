@@ -1,5 +1,7 @@
 // Tarifs du club, saison 2026-2027.
 // Source : "Prix licences par catégorie.xlsx" fourni par le club.
+// Mise à jour FFF : le supplément mutation s'applique désormais dès U10
+// (auparavant à partir de U13).
 type Pricing = { base: number; mutation: number };
 
 export const LICENCE_PRICING: Record<string, Pricing> = {
@@ -7,9 +9,9 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
   U7: { base: 380, mutation: 0 },
   U8: { base: 380, mutation: 0 },
   U9: { base: 380, mutation: 0 },
-  U10: { base: 380, mutation: 0 },
-  U11: { base: 380, mutation: 0 },
-  U12: { base: 380, mutation: 0 },
+  U10: { base: 380, mutation: 34.6 },
+  U11: { base: 380, mutation: 34.6 },
+  U12: { base: 380, mutation: 34.6 },
   U13: { base: 400, mutation: 34.6 },
   U14: { base: 400, mutation: 34.6 },
   U15: { base: 400, mutation: 34.6 },
@@ -23,9 +25,9 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
   U7F: { base: 320, mutation: 0 },
   U8F: { base: 320, mutation: 0 },
   U9F: { base: 320, mutation: 0 },
-  U10F: { base: 320, mutation: 0 },
-  U11F: { base: 320, mutation: 0 },
-  U12F: { base: 320, mutation: 0 },
+  U10F: { base: 320, mutation: 34.6 },
+  U11F: { base: 320, mutation: 34.6 },
+  U12F: { base: 320, mutation: 34.6 },
   U13F: { base: 320, mutation: 34.6 },
   U14F: { base: 340, mutation: 34.6 },
   U15F: { base: 340, mutation: 34.6 },
