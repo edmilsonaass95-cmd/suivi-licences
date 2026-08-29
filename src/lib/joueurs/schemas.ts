@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NATURES } from "@/lib/joueurs/pricing";
+import { NATURES, NIVEAUX } from "@/lib/joueurs/pricing";
 
 export const remiseMotifs = ["aucune", "parente", "autre"] as const;
 export type RemiseMotif = (typeof remiseMotifs)[number];
@@ -49,6 +49,7 @@ const playerBaseSchema = z.object({
   telephone: z.string().optional(),
   ville: z.string().min(1, "La ville est obligatoire"),
   nature: z.enum(NATURES).default("renouvellement"),
+  niveau: z.enum(NIVEAUX).default("standard"),
   ...remiseFields,
   notes: z.string().optional(),
 });
@@ -64,6 +65,7 @@ export const playerEditSchema = z
     telephone: playerBaseSchema.shape.telephone,
     ville: playerBaseSchema.shape.ville,
     nature: playerBaseSchema.shape.nature,
+    niveau: playerBaseSchema.shape.niveau,
     ...remiseFields,
   })
   .superRefine(checkRemise);

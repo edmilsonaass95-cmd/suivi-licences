@@ -14,7 +14,12 @@ import { PaymentHistory, type PaymentRow } from "@/components/joueurs/payment-hi
 import { AttachmentsSection } from "@/components/joueurs/attachments-section";
 import { ExportPlayerPdfButton } from "@/components/joueurs/export-player-pdf-button";
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
-import { NATURE_LABELS, type Nature } from "@/lib/joueurs/pricing";
+import {
+  NATURE_LABELS,
+  NIVEAU_LABELS,
+  type Nature,
+  type Niveau,
+} from "@/lib/joueurs/pricing";
 import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 
 const eur = new Intl.NumberFormat("fr-FR", {
@@ -143,6 +148,7 @@ export default async function PlayerDetailPage({
               telephone: player.telephone,
               ville: player.ville,
               nature: player.nature as Nature,
+              niveau: player.niveau as Niveau,
               remiseLabel,
               notes: player.notes,
               licencePrice,
@@ -159,6 +165,7 @@ export default async function PlayerDetailPage({
               sexe={player.sexe as "M" | "F"}
               initial={{
                 nature: player.nature as Nature,
+                niveau: player.niveau as Niveau,
                 email: player.email,
                 telephone: player.telephone,
                 ville: player.ville,
@@ -229,6 +236,10 @@ export default async function PlayerDetailPage({
           <p>
             <span className="text-muted-foreground">Nature : </span>
             {NATURE_LABELS[player.nature as Nature]}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Niveau : </span>
+            {NIVEAU_LABELS[player.niveau as Niveau]}
           </p>
           <p>
             <span className="text-muted-foreground">Remise : </span>

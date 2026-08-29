@@ -48,6 +48,7 @@ export default async function JoueursPage() {
     date_naissance: p.date_naissance,
     sexe: p.sexe as "M" | "F",
     nature: p.nature,
+    niveau: p.niveau,
     hors_sarcelles: p.hors_sarcelles,
     remise: Number(p.remise),
   }));

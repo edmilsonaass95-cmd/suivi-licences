@@ -1,6 +1,11 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { NATURE_LABELS, type Nature } from "@/lib/joueurs/pricing";
+import {
+  NATURE_LABELS,
+  NIVEAU_LABELS,
+  type Nature,
+  type Niveau,
+} from "@/lib/joueurs/pricing";
 
 export type PlayerPdfInfo = {
   nom: string;
@@ -12,6 +17,7 @@ export type PlayerPdfInfo = {
   telephone: string | null;
   ville: string | null;
   nature: Nature;
+  niveau: Niveau;
   remiseLabel: string;
   notes: string | null;
   licencePrice: number;
@@ -58,7 +64,8 @@ export function exportPlayerToPdf(
     body: [
       ["Date de naissance", player.dateNaissance, "E-mail", player.email ?? "—"],
       ["Téléphone", player.telephone ?? "—", "Ville", player.ville ?? "—"],
-      ["Nature", NATURE_LABELS[player.nature], "Remise", player.remiseLabel],
+      ["Nature", NATURE_LABELS[player.nature], "Niveau", NIVEAU_LABELS[player.niveau]],
+      ["Remise", player.remiseLabel, "", ""],
     ],
     columnStyles: {
       0: { fontStyle: "bold", cellWidth: 35 },

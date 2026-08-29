@@ -161,7 +161,8 @@ export async function createPlayer(values: unknown) {
     v.sexe,
     v.nature,
     horsSarcelles,
-    remise
+    remise,
+    v.niveau
   );
 
   const supabase = await createClient();
@@ -176,6 +177,7 @@ export async function createPlayer(values: unknown) {
       telephone: v.telephone || null,
       ville: v.ville,
       nature: v.nature,
+      niveau: v.niveau,
       hors_sarcelles: horsSarcelles,
       remise,
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
@@ -202,6 +204,7 @@ export async function createPlayer(values: unknown) {
     date_naissance: v.date_naissance,
     sexe: v.sexe,
     nature: v.nature,
+    niveau: v.niveau,
     hors_sarcelles: horsSarcelles,
     remise,
   });
@@ -244,7 +247,8 @@ export async function updatePlayer(playerId: string, values: unknown) {
     player.sexe as "M" | "F",
     v.nature,
     horsSarcelles,
-    remise
+    remise,
+    v.niveau
   );
 
   const { error } = await supabase
@@ -254,6 +258,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
       telephone: v.telephone || null,
       ville: v.ville,
       nature: v.nature,
+      niveau: v.niveau,
       hors_sarcelles: horsSarcelles,
       remise,
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
@@ -270,6 +275,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
     date_naissance: player.date_naissance,
     sexe: player.sexe as "M" | "F",
     nature: v.nature,
+    niveau: v.niveau,
     hors_sarcelles: horsSarcelles,
     remise,
   });

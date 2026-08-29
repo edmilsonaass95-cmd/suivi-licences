@@ -55,7 +55,7 @@ export async function addNextSaison() {
   const { data: players, error } = await fetchAllRows((from, to) =>
     supabase
       .from("players")
-      .select("id, date_naissance, sexe, nature, hors_sarcelles, remise")
+      .select("id, date_naissance, sexe, nature, niveau, hors_sarcelles, remise")
       .order("id")
       .range(from, to)
   );
@@ -69,6 +69,7 @@ export async function addNextSaison() {
       date_naissance: p.date_naissance,
       sexe: p.sexe as "M" | "F",
       nature: p.nature,
+      niveau: p.niveau,
       hors_sarcelles: p.hors_sarcelles,
       remise: Number(p.remise),
     })),

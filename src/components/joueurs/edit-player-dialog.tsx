@@ -18,8 +18,11 @@ import {
   isHorsSarcelles,
   NATURE_LABELS,
   NATURES,
+  NIVEAU_LABELS,
+  NIVEAUX,
   resolveRemise,
   type Nature,
+  type Niveau,
 } from "@/lib/joueurs/pricing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +60,7 @@ export function EditPlayerDialog({
   sexe: "M" | "F";
   initial: {
     nature: Nature;
+    niveau: Niveau;
     email: string | null;
     telephone: string | null;
     ville: string;
@@ -79,6 +83,7 @@ export function EditPlayerDialog({
     resolver: zodResolver(playerEditSchema),
     defaultValues: {
       nature: initial.nature,
+      niveau: initial.niveau,
       email: initial.email ?? "",
       telephone: initial.telephone ?? "",
       ville: initial.ville,
@@ -90,6 +95,7 @@ export function EditPlayerDialog({
 
   const ville = watch("ville");
   const nature = (watch("nature") ?? "renouvellement") as Nature;
+  const niveau = (watch("niveau") ?? "standard") as Niveau;
   const remiseMotif = (watch("remise_motif") ?? "aucune") as RemiseMotif;
   const remise = watch("remise") ?? 0;
   const remiseLienJoueurId = watch("remise_lien_joueur_id");
@@ -100,7 +106,8 @@ export function EditPlayerDialog({
     sexe,
     nature,
     horsSarcelles,
-    resolveRemise(remiseMotif, Number(remise))
+    resolveRemise(remiseMotif, Number(remise)),
+    niveau
   );
 
   const onSubmit = async (values: PlayerEditFormInput) => {
@@ -164,6 +171,26 @@ export function EditPlayerDialog({
                 {NATURES.map((n) => (
                   <SelectItem key={n} value={n}>
                     {NATURE_LABELS[n]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Niveau</Label>
+            <Select
+              value={niveau}
+              onValueChange={(v) => setValue("niveau", v as Niveau)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string) => NIVEAU_LABELS[v as Niveau]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {NIVEAUX.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {NIVEAU_LABELS[n]}
                   </SelectItem>
                 ))}
               </SelectContent>

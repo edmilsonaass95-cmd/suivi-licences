@@ -63,6 +63,36 @@ const NATURES_AVEC_MUTATION: Nature[] = [
   "changement_intra_ligue",
 ];
 
+export const NIVEAUX = [
+  "standard",
+  "u17_nat",
+  "u19_nat",
+  "u19_nat_f",
+  "d3f",
+  "senior_1",
+] as const;
+export type Niveau = (typeof NIVEAUX)[number];
+
+export const NIVEAU_LABELS: Record<Niveau, string> = {
+  standard: "Standard",
+  u17_nat: "U17NAT",
+  u19_nat: "U19NAT",
+  u19_nat_f: "U19NAT F",
+  d3f: "D3F",
+  senior_1: "Sénior 1",
+};
+
+// Remplace le tarif de base par catégorie pour un niveau spécial ; le
+// supplément mutation (par catégorie), le supplément hors Sarcelles et la
+// remise continuent de s'appliquer par-dessus.
+const NIVEAU_BASE_PRICE: Partial<Record<Niveau, number>> = {
+  u17_nat: 480,
+  u19_nat: 480,
+  u19_nat_f: 450,
+  d3f: 450,
+  senior_1: 500,
+};
+
 const SUPPLEMENT_HORS_SARCELLES = 20;
 
 export const REMISE_PARENTE = 20;
@@ -86,11 +116,12 @@ export function getLicencePrice(
   sexe: "M" | "F",
   nature: Nature,
   horsSarcelles: boolean,
-  remise = 0
+  remise = 0,
+  niveau: Niveau = "standard"
 ): number {
   const pricing = LICENCE_PRICING[categorie];
   if (!pricing) return 0;
-  let price = pricing.base;
+  let price = niveau === "standard" ? pricing.base : (NIVEAU_BASE_PRICE[niveau] ?? pricing.base);
   if (NATURES_AVEC_MUTATION.includes(nature)) price += pricing.mutation;
   // Le supplément hors Sarcelles ne s'applique pas aux licenciées féminines.
   if (horsSarcelles && sexe !== "F") price += SUPPLEMENT_HORS_SARCELLES;

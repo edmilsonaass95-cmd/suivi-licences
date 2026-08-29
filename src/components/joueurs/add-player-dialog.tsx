@@ -15,8 +15,11 @@ import {
   isHorsSarcelles,
   NATURE_LABELS,
   NATURES,
+  NIVEAU_LABELS,
+  NIVEAUX,
   resolveRemise,
   type Nature,
+  type Niveau,
 } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 import { Button } from "@/components/ui/button";
@@ -60,6 +63,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
     defaultValues: {
       sexe: "M",
       nature: "renouvellement",
+      niveau: "standard",
       ville: "Sarcelles",
       remise_motif: "aucune",
       remise: 0,
@@ -70,6 +74,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
   const dateNaissance = watch("date_naissance");
   const sexe = watch("sexe");
   const nature = (watch("nature") ?? "renouvellement") as Nature;
+  const niveau = (watch("niveau") ?? "standard") as Niveau;
   const ville = watch("ville");
   const remiseMotif = watch("remise_motif") ?? "aucune";
   const remise = watch("remise") ?? 0;
@@ -90,7 +95,8 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
         sexe,
         nature,
         horsSarcelles,
-        resolveRemise(remiseMotif, Number(remise))
+        resolveRemise(remiseMotif, Number(remise)),
+        niveau
       ),
     };
   }
@@ -222,6 +228,27 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
                 {NATURES.map((n) => (
                   <SelectItem key={n} value={n}>
                     {NATURE_LABELS[n]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="col-span-2 space-y-1.5">
+            <Label>Niveau</Label>
+            <Select
+              value={niveau}
+              onValueChange={(v) => setValue("niveau", v as Niveau)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string) => NIVEAU_LABELS[v as Niveau]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {NIVEAUX.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {NIVEAU_LABELS[n]}
                   </SelectItem>
                 ))}
               </SelectContent>
