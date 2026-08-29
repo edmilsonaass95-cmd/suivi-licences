@@ -4,15 +4,21 @@ import {
   PrelevementsTable,
   type PrelevementRow,
 } from "@/components/prelevements/prelevements-table";
+import { ImportPrelevementsDialog } from "@/components/prelevements/import-prelevements-dialog";
 
 export default async function PrelevementsPage() {
   const supabase = await createClient();
   const { canWrite } = await getCurrentUserRoles();
 
-  const { data } = await supabase
-    .from("prelevements")
-    .select("*, payments(player_id, players(id, nom, prenom))")
-    .order("date_prelevement");
+  const [{ data }, { data: players }] = await Promise.all([
+    supabase
+      .from("prelevements")
+      .select("*, payments(player_id, players(id, nom, prenom))")
+      .order("date_prelevement"),
+    canWrite
+      ? supabase.from("players").select("id, nom, prenom").order("nom")
+      : Promise.resolve({ data: [] as { id: string; nom: string; prenom: string }[] }),
+  ]);
 
   const rows: PrelevementRow[] = (data ?? []).map((p) => ({
     id: p.id,
@@ -28,10 +34,15 @@ export default async function PrelevementsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Paiements en ligne</h1>
-      <p className="mt-2 text-muted-foreground">
-        {rows.length} prélèvement(s), triés par date.
-      </p>
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Paiements en ligne</h1>
+          <p className="mt-2 text-muted-foreground">
+            {rows.length} prélèvement(s), triés par date.
+          </p>
+        </div>
+        {canWrite && <ImportPrelevementsDialog players={players ?? []} />}
+      </div>
       <div className="mt-6">
         <PrelevementsTable rows={rows} canWrite={canWrite} />
       </div>
