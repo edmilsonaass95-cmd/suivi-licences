@@ -4,11 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontalIcon } from "lucide-react";
+import { MoreHorizontalIcon, MailWarningIcon } from "lucide-react";
 
 import { updatePrelevementStatut } from "@/app/(app)/prelevements/actions";
+import { sendRelances } from "@/app/(app)/joueurs/actions";
 import { parseDateOnly, formatDateFr } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -30,6 +33,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export type PrelevementRow = {
   id: string;
@@ -77,11 +91,45 @@ export function PrelevementsTable({
   canWrite: boolean;
 }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("tous");
+  const [search, setSearch] = useState("");
+  const [relancing, setRelancing] = useState(false);
   const router = useRouter();
 
   const filtered = rows.filter(
-    (r) => filter === "tous" || r.statut === filter
+    (r) =>
+      (filter === "tous" || r.statut === filter) &&
+      r.playerName.toLowerCase().includes(search.toLowerCase())
   );
+
+  const echecPlayerIds = Array.from(
+    new Set(rows.filter((r) => r.statut === "echec").map((r) => r.playerId))
+  );
+
+  async function handleRelanceEchecs() {
+    setRelancing(true);
+    const result = await sendRelances(echecPlayerIds);
+    setRelancing(false);
+
+    if ("error" in result) {
+      toast.error("Impossible d'envoyer les relances", {
+        description: result.error,
+      });
+      return;
+    }
+
+    const { sent, failed } = result;
+    if (sent > 0) {
+      toast.success(sent > 1 ? `${sent} relances envoyées` : "Relance envoyée");
+    }
+    if (failed.length > 0) {
+      toast.error(`${failed.length} relance(s) non envoyée(s)`, {
+        description: failed
+          .map((f) => `${f.nom} ${f.prenom} : ${f.reason}`)
+          .join(", "),
+      });
+    }
+    router.refresh();
+  }
 
   const groups = new Map<string, PrelevementRow[]>();
   for (const row of filtered) {
@@ -107,7 +155,13 @@ export function PrelevementsTable({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Rechercher un joueur..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs"
+        />
         <Select
           value={filter}
           onValueChange={(v) =>
@@ -127,6 +181,50 @@ export function PrelevementsTable({
             ))}
           </SelectContent>
         </Select>
+        {canWrite && (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="ml-auto"
+                  disabled={relancing || echecPlayerIds.length === 0}
+                />
+              }
+            >
+              <MailWarningIcon />
+              {relancing
+                ? "Envoi..."
+                : `Relancer les échecs (${echecPlayerIds.length})`}
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Envoyer une relance {echecPlayerIds.length > 1
+                    ? `à ces ${echecPlayerIds.length} joueurs`
+                    : "à ce joueur"}{" "}
+                  ?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Un e-mail rappelant leur solde à régler sera envoyé à
+                  chaque joueur ayant au moins une échéance en échec (et un
+                  solde restant à payer). Les joueurs sans e-mail seront
+                  ignorés.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={relancing}
+                  onClick={handleRelanceEchecs}
+                >
+                  {relancing ? "Envoi..." : "Envoyer"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {filtered.length === 0 && (
