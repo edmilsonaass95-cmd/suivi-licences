@@ -12,6 +12,7 @@ import { parseDateOnly, formatDateFr } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -93,6 +94,7 @@ export function PrelevementsTable({
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("tous");
   const [search, setSearch] = useState("");
   const [relancing, setRelancing] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   const filtered = rows.filter(
@@ -101,13 +103,35 @@ export function PrelevementsTable({
       r.playerName.toLowerCase().includes(search.toLowerCase())
   );
 
-  const echecPlayerIds = Array.from(
-    new Set(rows.filter((r) => r.statut === "echec").map((r) => r.playerId))
+  const selectedPlayerIds = Array.from(
+    new Set(
+      filtered.filter((r) => selected.has(r.id)).map((r) => r.playerId)
+    )
   );
 
-  async function handleRelanceEchecs() {
+  function toggleRow(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleGroup(groupRows: PrelevementRow[], checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of groupRows) {
+        if (checked) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  }
+
+  async function handleRelance() {
     setRelancing(true);
-    const result = await sendRelances(echecPlayerIds);
+    const result = await sendRelances(selectedPlayerIds);
     setRelancing(false);
 
     if ("error" in result) {
@@ -128,6 +152,7 @@ export function PrelevementsTable({
           .join(", "),
       });
     }
+    setSelected(new Set());
     router.refresh();
   }
 
@@ -181,7 +206,7 @@ export function PrelevementsTable({
             ))}
           </SelectContent>
         </Select>
-        {canWrite && (
+        {canWrite && selectedPlayerIds.length > 0 && (
           <AlertDialog>
             <AlertDialogTrigger
               render={
@@ -189,36 +214,30 @@ export function PrelevementsTable({
                   type="button"
                   variant="outline"
                   className="ml-auto"
-                  disabled={relancing || echecPlayerIds.length === 0}
+                  disabled={relancing}
                 />
               }
             >
               <MailWarningIcon />
-              {relancing
-                ? "Envoi..."
-                : `Relancer les échecs (${echecPlayerIds.length})`}
+              {relancing ? "Envoi..." : `Relancer (${selectedPlayerIds.length})`}
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  Envoyer une relance {echecPlayerIds.length > 1
-                    ? `à ces ${echecPlayerIds.length} joueurs`
+                  Envoyer une relance {selectedPlayerIds.length > 1
+                    ? `à ces ${selectedPlayerIds.length} joueurs`
                     : "à ce joueur"}{" "}
                   ?
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   Un e-mail rappelant leur solde à régler sera envoyé à
-                  chaque joueur ayant au moins une échéance en échec (et un
-                  solde restant à payer). Les joueurs sans e-mail seront
-                  ignorés.
+                  chaque joueur sélectionné. Les joueurs déjà soldés ou
+                  sans e-mail seront ignorés.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={relancing}
-                  onClick={handleRelanceEchecs}
-                >
+                <AlertDialogAction disabled={relancing} onClick={handleRelance}>
                   {relancing ? "Envoi..." : "Envoyer"}
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -231,7 +250,9 @@ export function PrelevementsTable({
         <p className="text-muted-foreground">Aucun prélèvement à afficher.</p>
       )}
 
-      {Array.from(groups.entries()).map(([month, monthRows]) => (
+      {Array.from(groups.entries()).map(([month, monthRows]) => {
+        const allMonthSelected = monthRows.every((r) => selected.has(r.id));
+        return (
         <div key={month} className="mb-6">
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
             {month}
@@ -240,6 +261,17 @@ export function PrelevementsTable({
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canWrite && (
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allMonthSelected}
+                        onCheckedChange={(checked) =>
+                          toggleGroup(monthRows, checked === true)
+                        }
+                        aria-label={`Tout sélectionner (${month})`}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Joueur</TableHead>
                   <TableHead>#</TableHead>
                   <TableHead className="text-right">Montant</TableHead>
@@ -251,6 +283,17 @@ export function PrelevementsTable({
               <TableBody>
                 {monthRows.map((row) => (
                   <TableRow key={row.id}>
+                    {canWrite && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selected.has(row.id)}
+                          onCheckedChange={(checked) =>
+                            toggleRow(row.id, checked === true)
+                          }
+                          aria-label={`Sélectionner ${row.playerName}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Link
                         href={`/joueurs/${row.playerId}`}
@@ -308,7 +351,8 @@ export function PrelevementsTable({
             </Table>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
