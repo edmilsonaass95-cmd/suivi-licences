@@ -5,7 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DownloadIcon, Trash2Icon, MailWarningIcon } from "lucide-react";
-import { deletePlayers, sendRelances } from "@/app/(app)/joueurs/actions";
+import {
+  deletePlayers,
+  sendRelances,
+  updatePlayerNiveau,
+} from "@/app/(app)/joueurs/actions";
+import {
+  NIVEAU_LABELS,
+  NIVEAUX,
+  type Niveau,
+} from "@/lib/joueurs/pricing";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +60,7 @@ export type PlayerRow = {
   prenom: string;
   sexe: "M" | "F";
   categorie: string;
+  niveau: Niveau;
   licencePrice: number;
   paid: number;
   solde: number;
@@ -93,9 +103,11 @@ export function PlayersTable({
   const [categorie, setCategorie] = useState("toutes");
   const [genre, setGenre] = useState("tous");
   const [statut, setStatut] = useState("tous");
+  const [niveau, setNiveau] = useState("tous");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [relancing, setRelancing] = useState(false);
+  const [savingNiveauId, setSavingNiveauId] = useState<string | null>(null);
 
   const categories = useMemo(
     () => Array.from(new Set(rows.map((r) => r.categorie))).sort(),
@@ -109,6 +121,7 @@ export function PlayersTable({
     const matchesCategorie =
       categorie === "toutes" || r.categorie === categorie;
     const matchesGenre = genre === "tous" || r.sexe === genre;
+    const matchesNiveau = niveau === "tous" || r.niveau === niveau;
     const isSolde = r.licencePrice > 0 && r.paid >= r.licencePrice;
     const matchesStatut =
       statut === "tous" ||
@@ -116,7 +129,13 @@ export function PlayersTable({
       (statut === "partiel" && r.paid > 0 && !isSolde) ||
       (statut === "impaye" && r.paid === 0) ||
       (statut === "reste_a_payer" && !isSolde);
-    return matchesSearch && matchesCategorie && matchesGenre && matchesStatut;
+    return (
+      matchesSearch &&
+      matchesCategorie &&
+      matchesGenre &&
+      matchesNiveau &&
+      matchesStatut
+    );
   });
 
   function handleExport() {
@@ -208,6 +227,21 @@ export function PlayersTable({
     router.refresh();
   }
 
+  async function handleNiveauChange(playerId: string, next: Niveau) {
+    setSavingNiveauId(playerId);
+    const result = await updatePlayerNiveau(playerId, next);
+    setSavingNiveauId(null);
+
+    if (result.error) {
+      toast.error("Impossible de modifier le niveau", {
+        description: result.error,
+      });
+      return;
+    }
+    toast.success("Niveau mis à jour");
+    router.refresh();
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -247,6 +281,23 @@ export function PlayersTable({
             <SelectItem value="tous">Tous genres</SelectItem>
             <SelectItem value="M">Masculin</SelectItem>
             <SelectItem value="F">Féminin</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={niveau} onValueChange={(v) => setNiveau(v ?? "tous")}>
+          <SelectTrigger>
+            <SelectValue>
+              {(v: string) =>
+                v === "tous" ? "Tous niveaux" : NIVEAU_LABELS[v as Niveau]
+              }
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tous">Tous niveaux</SelectItem>
+            {NIVEAUX.map((n) => (
+              <SelectItem key={n} value={n}>
+                {NIVEAU_LABELS[n]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={statut} onValueChange={(v) => setStatut(v ?? "tous")}>
@@ -357,6 +408,7 @@ export function PlayersTable({
               )}
               <TableHead>Nom</TableHead>
               <TableHead>Catégorie</TableHead>
+              <TableHead>Niveau</TableHead>
               <TableHead className="text-right">Prix licence</TableHead>
               <TableHead className="text-right">Payé</TableHead>
               <TableHead className="text-right">{soldeLabel}</TableHead>
@@ -373,7 +425,7 @@ export function PlayersTable({
               <TableRow>
                 <TableCell
                   colSpan={
-                    (canWrite ? 7 : 6) + (previousSoldeLabel ? 1 : 0)
+                    (canWrite ? 8 : 7) + (previousSoldeLabel ? 1 : 0)
                   }
                   className="text-center text-muted-foreground"
                 >
@@ -403,6 +455,34 @@ export function PlayersTable({
                   </Link>
                 </TableCell>
                 <TableCell>{r.categorie}</TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  {canWrite ? (
+                    <Select
+                      value={r.niveau}
+                      onValueChange={(v) =>
+                        v && handleNiveauChange(r.id, v as Niveau)
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        disabled={savingNiveauId === r.id}
+                      >
+                        <SelectValue>
+                          {(v: string) => NIVEAU_LABELS[v as Niveau]}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NIVEAUX.map((n) => (
+                          <SelectItem key={n} value={n}>
+                            {NIVEAU_LABELS[n]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    NIVEAU_LABELS[r.niveau]
+                  )}
+                </TableCell>
                 <TableCell className="text-right">
                   {eur.format(r.licencePrice)}
                 </TableCell>

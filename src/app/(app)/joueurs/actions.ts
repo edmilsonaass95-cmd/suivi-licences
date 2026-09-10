@@ -11,8 +11,10 @@ import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import {
   getLicencePrice,
   isHorsSarcelles,
+  NIVEAUX,
   resolveRemise,
 } from "@/lib/joueurs/pricing";
+import { z } from "zod";
 import { parseDateOnly } from "@/lib/date";
 import {
   CHEQUE_STATUT_LABEL,
@@ -282,6 +284,61 @@ export async function updatePlayer(playerId: string, values: unknown) {
 
   revalidatePath(`/joueurs/${playerId}`);
   revalidatePath("/joueurs");
+  return { success: true };
+}
+
+/** Modification rapide du niveau depuis la liste des joueurs (sans passer par la fiche). */
+export async function updatePlayerNiveau(playerId: string, niveau: unknown) {
+  const parsed = z.enum(NIVEAUX).safeParse(niveau);
+  if (!parsed.success) {
+    return { error: "Niveau invalide" };
+  }
+
+  const supabase = await createClient();
+  const { data: player, error: fetchError } = await supabase
+    .from("players")
+    .select("date_naissance, sexe, nature, hors_sarcelles, remise")
+    .eq("id", playerId)
+    .single();
+
+  if (fetchError || !player) {
+    return { error: fetchError?.message ?? "Joueur introuvable" };
+  }
+
+  const categorie = getCategorieFFF(
+    parseDateOnly(player.date_naissance),
+    player.sexe as "M" | "F",
+    getSaisonStart()
+  );
+  const licencePrice = getLicencePrice(
+    categorie,
+    player.sexe as "M" | "F",
+    player.nature,
+    player.hors_sarcelles,
+    Number(player.remise),
+    parsed.data
+  );
+
+  const { error } = await supabase
+    .from("players")
+    .update({ niveau: parsed.data, licence_price: licencePrice })
+    .eq("id", playerId);
+
+  if (error) return { error: error.message };
+
+  await upsertCurrentPlayerSeason(supabase, {
+    id: playerId,
+    date_naissance: player.date_naissance,
+    sexe: player.sexe as "M" | "F",
+    nature: player.nature,
+    niveau: parsed.data,
+    hors_sarcelles: player.hors_sarcelles,
+    remise: Number(player.remise),
+  });
+
+  revalidatePath(`/joueurs/${playerId}`);
+  revalidatePath("/joueurs");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
