@@ -11,8 +11,11 @@ import {
   updatePlayerNiveau,
 } from "@/app/(app)/joueurs/actions";
 import {
+  NATURE_LABELS,
+  NATURES,
   NIVEAU_LABELS,
   NIVEAUX,
+  type Nature,
   type Niveau,
 } from "@/lib/joueurs/pricing";
 import { Input } from "@/components/ui/input";
@@ -61,6 +64,7 @@ export type PlayerRow = {
   sexe: "M" | "F";
   categorie: string;
   niveau: Niveau;
+  nature: Nature;
   licencePrice: number;
   paid: number;
   solde: number;
@@ -104,6 +108,7 @@ export function PlayersTable({
   const [genre, setGenre] = useState("tous");
   const [statut, setStatut] = useState("tous");
   const [niveau, setNiveau] = useState("tous");
+  const [nature, setNature] = useState("toutes");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [relancing, setRelancing] = useState(false);
@@ -122,6 +127,7 @@ export function PlayersTable({
       categorie === "toutes" || r.categorie === categorie;
     const matchesGenre = genre === "tous" || r.sexe === genre;
     const matchesNiveau = niveau === "tous" || r.niveau === niveau;
+    const matchesNature = nature === "toutes" || r.nature === nature;
     const isSolde = r.licencePrice > 0 && r.paid >= r.licencePrice;
     const matchesStatut =
       statut === "tous" ||
@@ -134,6 +140,7 @@ export function PlayersTable({
       matchesCategorie &&
       matchesGenre &&
       matchesNiveau &&
+      matchesNature &&
       matchesStatut
     );
   });
@@ -296,6 +303,23 @@ export function PlayersTable({
             {NIVEAUX.map((n) => (
               <SelectItem key={n} value={n}>
                 {NIVEAU_LABELS[n]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={nature} onValueChange={(v) => setNature(v ?? "toutes")}>
+          <SelectTrigger>
+            <SelectValue>
+              {(v: string) =>
+                v === "toutes" ? "Toutes natures" : NATURE_LABELS[v as Nature]
+              }
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="toutes">Toutes natures</SelectItem>
+            {NATURES.map((n) => (
+              <SelectItem key={n} value={n}>
+                {NATURE_LABELS[n]}
               </SelectItem>
             ))}
           </SelectContent>

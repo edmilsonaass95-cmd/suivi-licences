@@ -109,6 +109,7 @@ export default async function JoueursPage() {
       sexe: p.sexe as "M" | "F",
       categorie: snapshot?.categorie ?? "—",
       niveau: snapshot?.niveau ?? p.niveau,
+      nature: snapshot?.nature ?? p.nature,
       licencePrice,
       paid,
       solde,
