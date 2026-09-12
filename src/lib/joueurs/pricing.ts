@@ -46,6 +46,7 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
 export const NATURES = [
   "renouvellement",
   "libre",
+  "nouvelle_demande",
   "changement_inter_ligue",
   "changement_intra_ligue",
 ] as const;
@@ -54,6 +55,7 @@ export type Nature = (typeof NATURES)[number];
 export const NATURE_LABELS: Record<Nature, string> = {
   renouvellement: "Renouvellement",
   libre: "Libre (pas de licence la saison précédente)",
+  nouvelle_demande: "Nouvelle demande",
   changement_inter_ligue: "Changement de club inter ligue",
   changement_intra_ligue: "Changement de club dans la ligue",
 };
