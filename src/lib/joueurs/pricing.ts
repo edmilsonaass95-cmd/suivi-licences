@@ -45,25 +45,18 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
 
 export const NATURES = [
   "renouvellement",
-  "libre",
   "nouvelle_demande",
-  "changement_inter_ligue",
-  "changement_intra_ligue",
+  "changement_club",
 ] as const;
 export type Nature = (typeof NATURES)[number];
 
 export const NATURE_LABELS: Record<Nature, string> = {
   renouvellement: "Renouvellement",
-  libre: "Libre (pas de licence la saison précédente)",
   nouvelle_demande: "Nouvelle demande",
-  changement_inter_ligue: "Changement de club inter ligue",
-  changement_intra_ligue: "Changement de club dans la ligue",
+  changement_club: "Changement de club",
 };
 
-const NATURES_AVEC_MUTATION: Nature[] = [
-  "changement_inter_ligue",
-  "changement_intra_ligue",
-];
+const NATURES_AVEC_MUTATION: Nature[] = ["changement_club"];
 
 export const NIVEAUX = [
   "standard",
