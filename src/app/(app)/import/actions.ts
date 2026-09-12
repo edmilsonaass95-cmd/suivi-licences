@@ -37,7 +37,7 @@ export async function importPlayers(rows: ImportedRow[]) {
     const licencePrice = getLicencePrice(
       categorie,
       row.sexe,
-      "renouvellement",
+      row.nature,
       horsSarcelles
     );
 
@@ -49,7 +49,7 @@ export async function importPlayers(rows: ImportedRow[]) {
       email: row.email || null,
       telephone: row.telephone || null,
       ville: row.ville,
-      nature: "renouvellement",
+      nature: row.nature,
       hors_sarcelles: horsSarcelles,
       licence_price: licencePrice,
     });

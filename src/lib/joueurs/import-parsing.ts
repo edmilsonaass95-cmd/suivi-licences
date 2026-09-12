@@ -1,10 +1,12 @@
 import * as XLSX from "xlsx";
+import { NATURES, type Nature } from "@/lib/joueurs/pricing";
 
 export type ImportedRow = {
   nom: string;
   prenom: string;
   date_naissance: string; // YYYY-MM-DD
   sexe: "M" | "F";
+  nature: Nature;
   email: string;
   telephone: string;
   ville: string;
@@ -30,6 +32,7 @@ const HEADER_ALIASES: Record<keyof ImportedRow, string[]> = {
     "ddn",
   ],
   sexe: ["sexe", "genre"],
+  nature: ["nature"],
   email: ["email", "e-mail", "mail"],
   telephone: ["telephone", "téléphone", "tel", "tél"],
   ville: ["ville", "commune"],
@@ -107,6 +110,25 @@ export function parseFlexibleSexe(value: unknown): "M" | "F" | null {
   return null;
 }
 
+/**
+ * Reconnaît la nature même avec une formulation ancienne ou légèrement
+ * différente ("changement de club inter ligue", etc.) : toute mention de
+ * "changement" est traitée comme changement_club. Par défaut (valeur vide
+ * ou non reconnue) : renouvellement, comme avant l'ajout de cette colonne.
+ */
+export function parseFlexibleNature(value: unknown): Nature {
+  const str = String(value ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (str.includes("changement")) return "changement_club";
+  if (str.includes("nouvelle")) return "nouvelle_demande";
+  if ((NATURES as readonly string[]).includes(str)) return str as Nature;
+  return "renouvellement";
+}
+
 export async function parseSpreadsheet(
   file: File
 ): Promise<{ headers: string[]; rows: Record<string, unknown>[] }> {
@@ -168,6 +190,9 @@ export function mapRow(
     ? raw[mapping.date_naissance]
     : undefined;
   const sexeRaw = mapping.sexe ? raw[mapping.sexe] : undefined;
+  const nature = parseFlexibleNature(
+    mapping.nature ? raw[mapping.nature] : undefined
+  );
   const email = mapping.email ? String(raw[mapping.email] ?? "").trim() : "";
   const telephone = mapping.telephone
     ? String(raw[mapping.telephone] ?? "").trim()
@@ -196,6 +221,7 @@ export function mapRow(
       prenom,
       date_naissance: dateNaissance,
       sexe,
+      nature,
       email,
       telephone,
       ville: ville || "Sarcelles",

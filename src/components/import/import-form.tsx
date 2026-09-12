@@ -15,6 +15,7 @@ import {
   type ImportedRow,
 } from "@/lib/joueurs/import-parsing";
 import { formatDateFr } from "@/lib/date";
+import { NATURE_LABELS } from "@/lib/joueurs/pricing";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -230,6 +231,7 @@ export function ImportForm({
                   <TableHead>Prénom</TableHead>
                   <TableHead>Naissance</TableHead>
                   <TableHead>Sexe</TableHead>
+                  <TableHead>Nature</TableHead>
                   <TableHead>Ville</TableHead>
                   <TableHead>Statut</TableHead>
                 </TableRow>
@@ -241,6 +243,9 @@ export function ImportForm({
                     <TableCell>{row.data?.prenom ?? "—"}</TableCell>
                     <TableCell>{row.data?.date_naissance ?? "—"}</TableCell>
                     <TableCell>{row.data?.sexe ?? "—"}</TableCell>
+                    <TableCell>
+                      {row.data ? NATURE_LABELS[row.data.nature] : "—"}
+                    </TableCell>
                     <TableCell>{row.data?.ville ?? "—"}</TableCell>
                     <TableCell>
                       {!row.data ? (
