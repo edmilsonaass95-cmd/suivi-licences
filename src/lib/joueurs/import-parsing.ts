@@ -123,7 +123,10 @@ export function parseFlexibleNature(value: unknown): Nature {
     .trim()
     .toLowerCase();
 
+  // "renouvellement" contient littéralement "nouvelle" (re-nouvelle-ment) :
+  // il doit être vérifié avant le test générique sur "nouvelle" ci-dessous.
   if (str.includes("changement")) return "changement_club";
+  if (str.includes("renouvellement")) return "renouvellement";
   if (str.includes("nouvelle")) return "nouvelle_demande";
   if ((NATURES as readonly string[]).includes(str)) return str as Nature;
   return "renouvellement";
