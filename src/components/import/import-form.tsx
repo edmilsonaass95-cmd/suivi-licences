@@ -18,6 +18,7 @@ import {
   type ImportedRow,
 } from "@/lib/joueurs/import-parsing";
 import { formatDateFr } from "@/lib/date";
+import { chunk } from "@/lib/chunk";
 import { NATURE_LABELS, NATURES, type Nature } from "@/lib/joueurs/pricing";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+// Un seul appel pour 1300 lignes dépassait la durée maximale d'une requête.
+const IMPORT_BATCH_SIZE = 100;
 
 type ExistingPlayer = { nom: string; prenom: string; date_naissance: string };
 
@@ -181,6 +185,7 @@ export function ImportForm({
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{
     imported: number;
     skipped: number;
@@ -314,16 +319,43 @@ export function ImportForm({
 
   const handleImport = async () => {
     setImporting(true);
-    const summary = await importPlayers(importable);
-    setImporting(false);
+    setResult(null);
+    const total = { imported: 0, skipped: 0, paymentsCreated: 0, errors: [] as string[] };
+    let done = 0;
 
-    if ("error" in summary) {
-      toast.error("Import impossible", { description: summary.error });
-      return;
+    for (const batch of chunk(importable, IMPORT_BATCH_SIZE)) {
+      setProgress(`${done} / ${importable.length}`);
+      let summary;
+      try {
+        summary = await importPlayers(batch);
+      } catch {
+        total.errors.push(
+          `Connexion interrompue après ${done} ligne(s) : relance l'import, les joueurs déjà importés seront ignorés.`
+        );
+        break;
+      }
+      if ("error" in summary) {
+        total.errors.push(summary.error ?? "Import impossible");
+        break;
+      }
+      total.imported += summary.imported;
+      total.skipped += summary.skipped;
+      total.paymentsCreated += summary.paymentsCreated;
+      total.errors.push(...summary.errors);
+      done += batch.length;
     }
 
-    setResult(summary);
-    toast.success(`${summary.imported} joueur(s) importé(s)`);
+    setImporting(false);
+    setProgress(null);
+    setResult(total);
+    if (total.imported > 0) {
+      toast.success(`${total.imported} joueur(s) importé(s)`);
+    }
+    if (done < importable.length) {
+      toast.error("Import interrompu", {
+        description: `${done} ligne(s) traitée(s) sur ${importable.length}.`,
+      });
+    }
     router.refresh();
   };
 
@@ -412,7 +444,7 @@ export function ImportForm({
             disabled={importing || importable.length === 0}
           >
             {importing
-              ? "Import en cours..."
+              ? `Import en cours... ${progress ?? ""}`
               : `Importer ${importable.length} joueur(s)`}
           </Button>
         </>

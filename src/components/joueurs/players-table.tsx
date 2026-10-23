@@ -49,7 +49,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { exportToExcel, todayStamp } from "@/lib/export-xlsx";
+import { chunk } from "@/lib/chunk";
 import { PLAYER_STATUT_LABEL } from "@/lib/joueurs/statut-labels";
+
+const DELETE_BATCH_SIZE = 50;
 
 function statutLabel(paid: number, expected: number) {
   if (expected > 0 && paid >= expected) return "Payé";
@@ -111,6 +114,7 @@ export function PlayersTable({
   const [nature, setNature] = useState("toutes");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState<string | null>(null);
   const [relancing, setRelancing] = useState(false);
   const [savingNiveauId, setSavingNiveauId] = useState<string | null>(null);
 
@@ -187,18 +191,44 @@ export function PlayersTable({
 
   async function handleDelete() {
     setDeleting(true);
-    const result = await deletePlayers(Array.from(selected));
-    setDeleting(false);
+    const ids = Array.from(selected);
+    let done = 0;
+    let failure: string | null = null;
 
-    if (result.error) {
-      toast.error("Impossible de supprimer", { description: result.error });
-      return;
+    // Par petits paquets : supprimer un millier de joueurs (avec leurs
+    // paiements en cascade) en une seule requête dépasse la durée maximale.
+    for (const batch of chunk(ids, DELETE_BATCH_SIZE)) {
+      setDeleteProgress(`${done} / ${ids.length}`);
+      toast.loading(`Suppression en cours... ${done} / ${ids.length}`, {
+        id: "delete-progress",
+      });
+      let result;
+      try {
+        result = await deletePlayers(batch);
+      } catch {
+        failure = "Connexion interrompue.";
+        break;
+      }
+      if (result.error) {
+        failure = result.error;
+        break;
+      }
+      done += batch.length;
     }
 
-    toast.success(
-      selected.size > 1 ? "Joueurs supprimés" : "Joueur supprimé"
-    );
-    setSelected(new Set());
+    setDeleting(false);
+    setDeleteProgress(null);
+
+    toast.dismiss("delete-progress");
+    if (failure) {
+      toast.error("Suppression interrompue", {
+        description: `${done} joueur(s) supprimé(s) sur ${ids.length}. ${failure}`,
+      });
+      setSelected(new Set(ids.slice(done)));
+    } else {
+      toast.success(done > 1 ? `${done} joueurs supprimés` : "Joueur supprimé");
+      setSelected(new Set());
+    }
     router.refresh();
   }
 
@@ -407,7 +437,7 @@ export function PlayersTable({
                   disabled={deleting}
                   onClick={handleDelete}
                 >
-                  {deleting ? "Suppression..." : "Supprimer"}
+                  {deleting ? `Suppression... ${deleteProgress ?? ""}` : "Supprimer"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

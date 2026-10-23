@@ -7,6 +7,57 @@ import { getLicencePrice, isHorsSarcelles } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 import type { ImportedRow } from "@/lib/joueurs/import-parsing";
 
+type PlayerRecord = {
+  nom: string;
+  prenom: string;
+  date_naissance: string;
+  sexe: "M" | "F";
+  email: string | null;
+  telephone: string | null;
+  ville: string;
+  nature: ImportedRow["nature"];
+  hors_sarcelles: boolean;
+  licence_price: number;
+  notes: string | null;
+};
+
+function toRecord(row: ImportedRow): PlayerRecord {
+  const categorie = getCategorieFFF(
+    parseDateOnly(row.date_naissance),
+    row.sexe,
+    getSaisonStart()
+  );
+  const horsSarcelles = isHorsSarcelles(row.ville);
+  return {
+    nom: row.nom,
+    prenom: row.prenom,
+    date_naissance: row.date_naissance,
+    sexe: row.sexe,
+    email: row.email || null,
+    telephone: row.telephone || null,
+    ville: row.ville,
+    nature: row.nature,
+    hors_sarcelles: horsSarcelles,
+    licence_price: getLicencePrice(
+      categorie,
+      row.sexe,
+      row.nature,
+      horsSarcelles
+    ),
+    notes: row.note || null,
+  };
+}
+
+const keyOf = (r: { nom: string; prenom: string; date_naissance: string }) =>
+  `${r.nom}|${r.prenom}|${r.date_naissance}`;
+
+/**
+ * Importe un lot de joueurs (le client envoie le fichier par paquets : un seul
+ * appel pour 1300 lignes dépassait la durée maximale d'une requête serveur).
+ * Les joueurs du lot sont enregistrés en une seule opération ; en cas de
+ * doublon dans le lot, on retombe sur un enregistrement ligne par ligne pour
+ * n'écarter que les doublons.
+ */
 export async function importPlayers(rows: ImportedRow[]) {
   const supabase = await createClient();
 
@@ -24,56 +75,43 @@ export async function importPlayers(rows: ImportedRow[]) {
   }
 
   const saisonStart = getSaisonStart();
-  let imported = 0;
   let skipped = 0;
-  let paymentsCreated = 0;
   const errors: string[] = [];
 
-  for (const row of rows) {
-    const categorie = getCategorieFFF(
-      parseDateOnly(row.date_naissance),
-      row.sexe,
-      getSaisonStart()
-    );
-    const horsSarcelles = isHorsSarcelles(row.ville);
-    const licencePrice = getLicencePrice(
-      categorie,
-      row.sexe,
-      row.nature,
-      horsSarcelles
-    );
+  const records = rows.map((row) => ({ row, record: toRecord(row) }));
+  const insertedIds = new Map<string, string>();
 
-    const { data: inserted, error } = await supabase
-      .from("players")
-      .insert({
-        nom: row.nom,
-        prenom: row.prenom,
-        date_naissance: row.date_naissance,
-        sexe: row.sexe,
-        email: row.email || null,
-        telephone: row.telephone || null,
-        ville: row.ville,
-        nature: row.nature,
-        hors_sarcelles: horsSarcelles,
-        licence_price: licencePrice,
-        notes: row.note || null,
-      })
-      .select("id")
-      .single();
+  const bulk = await supabase
+    .from("players")
+    .insert(records.map((r) => r.record))
+    .select("id, nom, prenom, date_naissance");
 
-    if (error) {
-      if (error.code === "23505") {
-        skipped += 1;
+  if (!bulk.error) {
+    for (const p of bulk.data) insertedIds.set(keyOf(p), p.id);
+  } else if (bulk.error.code === "23505") {
+    for (const { row, record } of records) {
+      const single = await supabase
+        .from("players")
+        .insert(record)
+        .select("id, nom, prenom, date_naissance")
+        .single();
+      if (single.error) {
+        if (single.error.code === "23505") skipped += 1;
+        else errors.push(`${row.nom} ${row.prenom} : ${single.error.message}`);
       } else {
-        errors.push(`${row.nom} ${row.prenom} : ${error.message}`);
+        insertedIds.set(keyOf(single.data), single.data.id);
       }
-      continue;
     }
-    imported += 1;
+  } else {
+    return { error: bulk.error.message };
+  }
 
-    if (row.montant && row.montant > 0) {
-      const { error: paymentError } = await supabase.from("payments").insert({
-        player_id: inserted.id,
+  const payments = records.flatMap(({ row }) => {
+    const playerId = insertedIds.get(keyOf(row));
+    if (!playerId || !row.montant || row.montant <= 0) return [];
+    return [
+      {
+        player_id: playerId,
         mode: "non_renseigne",
         amount: row.montant,
         saison_start: saisonStart,
@@ -81,17 +119,24 @@ export async function importPlayers(rows: ImportedRow[]) {
         ...(row.date_reglement
           ? { created_at: `${row.date_reglement}T12:00:00Z` }
           : {}),
-      });
-      if (paymentError) {
-        errors.push(
-          `${row.nom} ${row.prenom} : joueur importé mais paiement non enregistré (${paymentError.message})`
-        );
-      } else {
-        paymentsCreated += 1;
-      }
+      },
+    ];
+  });
+
+  let paymentsCreated = 0;
+  if (payments.length > 0) {
+    const { error: paymentError } = await supabase
+      .from("payments")
+      .insert(payments);
+    if (paymentError) {
+      errors.push(
+        `${payments.length} paiement(s) non enregistré(s) : ${paymentError.message}`
+      );
+    } else {
+      paymentsCreated = payments.length;
     }
   }
 
   revalidatePath("/joueurs");
-  return { imported, skipped, paymentsCreated, errors };
+  return { imported: insertedIds.size, skipped, paymentsCreated, errors };
 }
