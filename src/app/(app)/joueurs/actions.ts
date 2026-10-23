@@ -61,13 +61,23 @@ export async function deletePlayers(playerIds: string[]) {
     if (storageError) return { error: storageError.message };
   }
 
+  // On compte les lignes réellement supprimées : une règle d'accès peut en
+  // écarter certaines sans renvoyer d'erreur.
+  let deleted = 0;
   for (const batch of idBatches) {
-    const { error } = await supabase.from("players").delete().in("id", batch);
-    if (error) return { error: error.message };
+    const { data, error } = await supabase
+      .from("players")
+      .delete()
+      .in("id", batch)
+      .select("id");
+    if (error) return { error: error.message, deleted };
+    deleted += data?.length ?? 0;
   }
 
-  revalidatePath("/joueurs");
-  return { success: true };
+  // Pas de revalidatePath ici : l'appelant supprime par paquets et rafraîchit
+  // la page une seule fois à la fin. Revalider à chaque paquet refaisait le
+  // calcul complet de la page Joueurs (tous les joueurs) à chaque appel.
+  return { success: true, deleted };
 }
 
 export async function sendRelances(playerIds: string[]) {

@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import { getLicencePrice, isHorsSarcelles } from "@/lib/joueurs/pricing";
@@ -137,6 +136,7 @@ export async function importPlayers(rows: ImportedRow[]) {
     }
   }
 
-  revalidatePath("/joueurs");
+  // Pas de revalidatePath : le client importe par lots et rafraîchit la page
+  // une seule fois à la fin.
   return { imported: insertedIds.size, skipped, paymentsCreated, errors };
 }

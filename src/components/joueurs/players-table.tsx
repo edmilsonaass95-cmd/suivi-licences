@@ -52,7 +52,7 @@ import { exportToExcel, todayStamp } from "@/lib/export-xlsx";
 import { chunk } from "@/lib/chunk";
 import { PLAYER_STATUT_LABEL } from "@/lib/joueurs/statut-labels";
 
-const DELETE_BATCH_SIZE = 50;
+const DELETE_BATCH_SIZE = 150;
 
 function statutLabel(paid: number, expected: number) {
   if (expected > 0 && paid >= expected) return "Payé";
@@ -193,6 +193,7 @@ export function PlayersTable({
     setDeleting(true);
     const ids = Array.from(selected);
     let done = 0;
+    let processed = 0;
     let failure: string | null = null;
 
     // Par petits paquets : supprimer un millier de joueurs (avec leurs
@@ -209,11 +210,12 @@ export function PlayersTable({
         failure = "Connexion interrompue.";
         break;
       }
+      done += result.deleted ?? 0;
       if (result.error) {
         failure = result.error;
         break;
       }
-      done += batch.length;
+      processed += batch.length;
     }
 
     setDeleting(false);
@@ -224,7 +226,12 @@ export function PlayersTable({
       toast.error("Suppression interrompue", {
         description: `${done} joueur(s) supprimé(s) sur ${ids.length}. ${failure}`,
       });
-      setSelected(new Set(ids.slice(done)));
+      setSelected(new Set(ids.slice(processed)));
+    } else if (done < ids.length) {
+      toast.error("Certains joueurs n'ont pas été supprimés", {
+        description: `${done} joueur(s) supprimé(s) sur ${ids.length}. Les autres sont refusés par la base de données (droits insuffisants ?).`,
+      });
+      setSelected(new Set());
     } else {
       toast.success(done > 1 ? `${done} joueurs supprimés` : "Joueur supprimé");
       setSelected(new Set());

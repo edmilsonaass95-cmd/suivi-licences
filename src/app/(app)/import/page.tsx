@@ -19,13 +19,8 @@ export default async function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold">Import</h1>
         <p className="mt-2 text-muted-foreground">
-        Importe une liste de joueurs depuis un fichier CSV ou Excel, puis
-        vérifie l&apos;aperçu : chaque cellule est modifiable et chaque ligne a
-        un statut que tu choisis (« À importer », « Ignoré » ou « Supprimer »).
-        Les doublons et les homonymes sont proposés « Ignoré ». Colonnes
-        facultatives : « Montant » (enregistré en paiement « Non renseigné »),
-        « Date de règlement » et « Note ».
-      </p>
+          Cette page est réservée aux administrateurs.
+        </p>
       </div>
     );
   }
@@ -42,13 +37,12 @@ export default async function ImportPage() {
     <div>
       <h1 className="text-2xl font-semibold">Import de joueurs</h1>
       <p className="mt-2 text-muted-foreground">
-        Importe une liste de joueurs depuis un fichier CSV ou Excel. Les
-        doublons certains (même nom, prénom et date de naissance) sont
-        détectés automatiquement et ignorés. Les homonymes probables (même
-        nom, prénom et année de naissance, mais date exacte différente) sont
-        signalés « À vérifier » et ne sont pas importés automatiquement : il
-        faut cocher « Pas un doublon, importer quand même » après
-        vérification manuelle pour les inclure. Les colonnes facultatives « Montant » (enregistré en paiement « Non renseigné »), « Date de règlement » (date de ce paiement) et « Note » (ajoutée aux notes du joueur) sont aussi prises en compte.
+        Importe une liste de joueurs depuis un fichier CSV ou Excel, puis
+        vérifie l&apos;aperçu : chaque cellule est modifiable et chaque ligne a
+        un statut que tu choisis (« À importer », « Ignoré » ou « Supprimer »).
+        Les doublons et les homonymes sont proposés « Ignoré ». Colonnes
+        facultatives : « Montant » (enregistré en paiement « Non renseigné »),
+        « Date de règlement » et « Note ».
       </p>
       <div className="mt-6">
         <ImportForm existingPlayers={players ?? []} />

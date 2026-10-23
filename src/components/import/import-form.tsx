@@ -3,7 +3,7 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UploadIcon } from "lucide-react";
+import { CheckCircle2Icon, TriangleAlertIcon, UploadIcon } from "lucide-react";
 
 import { importPlayers } from "@/app/(app)/import/actions";
 import {
@@ -185,13 +185,18 @@ export function ImportForm({
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [result, setResult] = useState<{
     imported: number;
     skipped: number;
     paymentsCreated: number;
     errors: string[];
+    interrupted: boolean;
   } | null>(null);
+  const progressPanelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
   const router = useRouter();
@@ -321,10 +326,15 @@ export function ImportForm({
     setImporting(true);
     setResult(null);
     const total = { imported: 0, skipped: 0, paymentsCreated: 0, errors: [] as string[] };
+    const totalRows = importable.length;
     let done = 0;
+    setProgress({ done: 0, total: totalRows });
+    setTimeout(
+      () => progressPanelRef.current?.scrollIntoView({ block: "center" }),
+      50
+    );
 
     for (const batch of chunk(importable, IMPORT_BATCH_SIZE)) {
-      setProgress(`${done} / ${importable.length}`);
       let summary;
       try {
         summary = await importPlayers(batch);
@@ -343,11 +353,11 @@ export function ImportForm({
       total.paymentsCreated += summary.paymentsCreated;
       total.errors.push(...summary.errors);
       done += batch.length;
+      setProgress({ done, total: totalRows });
     }
 
     setImporting(false);
-    setProgress(null);
-    setResult(total);
+    setResult({ ...total, interrupted: done < totalRows });
     if (total.imported > 0) {
       toast.success(`${total.imported} joueur(s) importé(s)`);
     }
@@ -376,7 +386,7 @@ export function ImportForm({
           type="button"
           variant="outline"
           onClick={() => inputRef.current?.click()}
-          disabled={parsing}
+          disabled={parsing || importing}
         >
           <UploadIcon />
           {parsing ? "Lecture..." : "Choisir un fichier CSV ou Excel"}
@@ -385,6 +395,87 @@ export function ImportForm({
           <span className="text-sm text-muted-foreground">{fileName}</span>
         )}
       </div>
+
+      {(importing || result) && progress && (
+        <div
+          ref={progressPanelRef}
+          className="space-y-2 rounded-xl border bg-card p-4"
+        >
+          <div className="flex items-center justify-between gap-3 text-sm font-medium">
+            <span className="flex items-center gap-2">
+              {importing ? (
+                "Import en cours... ne ferme pas cette page"
+              ) : result?.interrupted ? (
+                <>
+                  <TriangleAlertIcon className="size-4 text-destructive" />
+                  Import interrompu
+                </>
+              ) : (
+                <>
+                  <CheckCircle2Icon className="size-4 text-primary" />
+                  Import terminé
+                </>
+              )}
+            </span>
+            <span>
+              {progress.total === 0
+                ? 100
+                : Math.round((progress.done / progress.total) * 100)}{" "}
+              %
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={
+              progress.total === 0
+                ? 100
+                : Math.round((progress.done / progress.total) * 100)
+            }
+            className="h-3 w-full overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                result?.interrupted ? "bg-destructive" : "bg-primary"
+              }`}
+              style={{
+                width: `${
+                  progress.total === 0
+                    ? 100
+                    : (progress.done / progress.total) * 100
+                }%`,
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {progress.done} / {progress.total} ligne(s) traitée(s)
+          </p>
+          {result && (
+            <div className="text-sm">
+              <p>
+                <strong>{result.imported}</strong> joueur(s) importé(s),{" "}
+                <strong>{result.skipped}</strong> refusé(s) car déjà
+                présent(s)
+                {result.paymentsCreated > 0 && (
+                  <>
+                    , <strong>{result.paymentsCreated}</strong> paiement(s)
+                    enregistré(s)
+                  </>
+                )}
+                .
+              </p>
+              {result.errors.length > 0 && (
+                <ul className="mt-2 list-disc pl-5 text-destructive">
+                  {result.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {rows.length > 0 && (
         <>
@@ -444,34 +535,12 @@ export function ImportForm({
             disabled={importing || importable.length === 0}
           >
             {importing
-              ? `Import en cours... ${progress ?? ""}`
+              ? "Import en cours..."
               : `Importer ${importable.length} joueur(s)`}
           </Button>
         </>
       )}
 
-      {result && (
-        <div className="rounded-lg bg-muted p-3 text-sm">
-          <p>
-            <strong>{result.imported}</strong> joueur(s) importé(s),{" "}
-            <strong>{result.skipped}</strong> refusé(s) car déjà présent(s)
-            {result.paymentsCreated > 0 && (
-              <>
-                , <strong>{result.paymentsCreated}</strong> paiement(s)
-                enregistré(s)
-              </>
-            )}
-            .
-          </p>
-          {result.errors.length > 0 && (
-            <ul className="mt-2 list-disc pl-5 text-destructive">
-              {result.errors.map((err, i) => (
-                <li key={i}>{err}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
     </div>
   );
 }

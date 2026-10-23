@@ -55,6 +55,17 @@ function computeSnapshot(
   };
 }
 
+function sameSnapshot(a: PlayerSeasonSnapshot, b: PlayerSeasonSnapshot) {
+  return (
+    a.categorie === b.categorie &&
+    Math.abs(a.licence_price - b.licence_price) < 0.001 &&
+    a.nature === b.nature &&
+    a.niveau === b.niveau &&
+    a.hors_sarcelles === b.hors_sarcelles &&
+    Math.abs(a.remise - b.remise) < 0.001
+  );
+}
+
 /**
  * Fige (saison passée) ou rafraîchit (saison en cours ou à venir) l'instantané
  * tarifaire d'un ensemble de joueurs pour une saison donnée. Ne réécrit
@@ -68,27 +79,40 @@ export async function ensurePlayerSeasons(
 ): Promise<Map<string, PlayerSeasonSnapshot>> {
   if (players.length === 0) return new Map();
 
-  const { data: existing } = await supabase
-    .from("player_seasons")
-    .select(
-      "player_id, saison_start, categorie, licence_price, nature, niveau, hors_sarcelles, remise"
-    )
-    .eq("saison_start", saisonStart)
-    .in(
-      "player_id",
-      players.map((p) => p.id)
-    );
+  // Par paquets : au-delà de quelques centaines d'identifiants, l'URL de la
+  // requête dépasse la limite du serveur et la lecture échoue (après un long
+  // délai), ce qui forçait la réécriture de tous les instantanés.
+  const existing: PlayerSeasonSnapshot[] = [];
+  const batches = await Promise.all(
+    chunk(
+      players.map((p) => p.id),
+      150
+    ).map(async (ids) => {
+      const { data, error } = await supabase
+        .from("player_seasons")
+        .select(
+          "player_id, saison_start, categorie, licence_price, nature, niveau, hors_sarcelles, remise"
+        )
+        .eq("saison_start", saisonStart)
+        .in("player_id", ids);
+      if (error) console.error("ensurePlayerSeasons select:", error.message);
+      return data ?? [];
+    })
+  );
+  for (const batch of batches) existing.push(...batch);
 
   const result = new Map<string, PlayerSeasonSnapshot>();
-  const existingIds = new Set<string>();
+  const existingById = new Map<string, PlayerSeasonSnapshot>();
   for (const row of existing ?? []) {
-    existingIds.add(row.player_id);
-    result.set(row.player_id, {
+    const snapshot = {
       ...row,
       licence_price: Number(row.licence_price),
       remise: Number(row.remise),
-    });
+    };
+    existingById.set(row.player_id, snapshot);
+    result.set(row.player_id, snapshot);
   }
+  const existingIds = new Set(existingById.keys());
 
   // Une saison non encore écoulée (en cours ou future) reste vivante : on la
   // recalcule à chaque consultation. Seule une saison déjà terminée est figée
@@ -103,7 +127,12 @@ export async function ensurePlayerSeasons(
     if (isLiveSaison) {
       const snapshot = computeSnapshot(player, saisonStart);
       result.set(player.id, snapshot);
-      toUpsert.push(snapshot);
+      // Inutile de réécrire un instantané déjà à jour : à chaque affichage de
+      // la liste, des milliers d'écritures ralentissaient la page.
+      const previous = existingById.get(player.id);
+      if (!previous || !sameSnapshot(previous, snapshot)) {
+        toUpsert.push(snapshot);
+      }
       if (
         isCurrentSaison &&
         player.licence_price !== undefined &&
