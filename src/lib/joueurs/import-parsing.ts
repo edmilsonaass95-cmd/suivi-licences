@@ -241,6 +241,21 @@ function cell(raw: Record<string, unknown>, column?: string): string {
   return column ? String(raw[column] ?? "").trim() : "";
 }
 
+/**
+ * Rend son 0 initial à un numéro français : Excel stocke souvent le téléphone
+ * comme un nombre ("622799647") et perd ce 0 ; "+33 6 22 79 96 47" devient
+ * "0622799647". Un numéro déjà au bon format (ou étranger) est laissé tel quel.
+ */
+export function normalizeTelephone(value: unknown): string {
+  const original = String(value ?? "").trim();
+  const compact = original.replace(/[\s.\-()]/g, "");
+  if (/^(\+33|0033)\d{9}$/.test(compact)) {
+    return "0" + compact.replace(/^(\+33|0033)/, "");
+  }
+  if (/^\d{9}$/.test(compact)) return "0" + compact;
+  return original;
+}
+
 /** Convertit une ligne brute du fichier en champs texte modifiables. */
 export function rowToDraft(
   raw: Record<string, unknown>,
@@ -263,7 +278,9 @@ export function rowToDraft(
       mapping.nature ? raw[mapping.nature] : undefined
     ),
     email: cell(raw, mapping.email),
-    telephone: cell(raw, mapping.telephone),
+    telephone: normalizeTelephone(
+      mapping.telephone ? raw[mapping.telephone] : ""
+    ),
     ville: mapping.ville ? cell(raw, mapping.ville) : "Sarcelles",
     montant:
       montant === null
@@ -313,7 +330,7 @@ export function validateDraft(draft: ImportDraft): {
       sexe,
       nature: draft.nature,
       email: draft.email.trim(),
-      telephone: draft.telephone.trim(),
+      telephone: normalizeTelephone(draft.telephone),
       ville: draft.ville.trim() || "Sarcelles",
       montant: montant && montant > 0 ? montant : null,
       date_reglement: dateReglement || null,
