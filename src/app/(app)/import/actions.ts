@@ -105,6 +105,7 @@ export async function importPlayers(rows: ImportedRow[]) {
     return { error: bulk.error.message };
   }
 
+  const nowIso = new Date().toISOString();
   const payments = records.flatMap(({ row }) => {
     const playerId = insertedIds.get(keyOf(row));
     if (!playerId || !row.montant || row.montant <= 0) return [];
@@ -115,9 +116,11 @@ export async function importPlayers(rows: ImportedRow[]) {
         amount: row.montant,
         saison_start: saisonStart,
         created_by: user?.id,
-        ...(row.date_reglement
-          ? { created_at: `${row.date_reglement}T12:00:00Z` }
-          : {}),
+        // Toujours renseigné : dans une insertion groupée, une clé absente sur
+        // certaines lignes est envoyée à null (et non à la valeur par défaut).
+        created_at: row.date_reglement
+          ? `${row.date_reglement}T12:00:00Z`
+          : nowIso,
       },
     ];
   });
