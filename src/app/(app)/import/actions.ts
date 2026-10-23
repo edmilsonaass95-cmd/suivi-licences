@@ -78,6 +78,9 @@ export async function importPlayers(rows: ImportedRow[]) {
         amount: row.montant,
         saison_start: saisonStart,
         created_by: user?.id,
+        ...(row.date_reglement
+          ? { created_at: `${row.date_reglement}T12:00:00Z` }
+          : {}),
       });
       if (paymentError) {
         errors.push(

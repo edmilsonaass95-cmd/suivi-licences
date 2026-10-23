@@ -235,6 +235,7 @@ export function ImportForm({
                   <TableHead>Nature</TableHead>
                   <TableHead>Ville</TableHead>
                   <TableHead>Montant</TableHead>
+                  <TableHead>Date règl.</TableHead>
                   <TableHead>Note</TableHead>
                   <TableHead>Statut</TableHead>
                 </TableRow>
@@ -253,6 +254,11 @@ export function ImportForm({
                     <TableCell>
                       {row.data?.montant != null
                         ? `${row.data.montant} €`
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {row.data?.date_reglement
+                        ? formatDateFr(row.data.date_reglement)
                         : "—"}
                     </TableCell>
                     <TableCell className="max-w-40 truncate">

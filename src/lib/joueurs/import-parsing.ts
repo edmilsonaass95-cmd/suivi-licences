@@ -12,6 +12,8 @@ export type ImportedRow = {
   ville: string;
   /** Montant déjà réglé (enregistré en paiement « Non renseigné »), ou null. */
   montant: number | null;
+  /** Date du règlement (YYYY-MM-DD), utilisée pour le paiement créé avec le montant. */
+  date_reglement: string | null;
   /** Note libre, enregistrée dans les notes du joueur. */
   note: string;
 };
@@ -41,6 +43,12 @@ const HEADER_ALIASES: Record<keyof ImportedRow, string[]> = {
   telephone: ["telephone", "téléphone", "tel", "tél"],
   ville: ["ville", "commune"],
   montant: ["montant", "montant paye", "montant regle", "montant reglement"],
+  date_reglement: [
+    "date de reglement",
+    "date reglement",
+    "date de paiement",
+    "date paiement",
+  ],
   note: ["note", "notes", "commentaire", "remarque"],
 };
 
@@ -217,6 +225,10 @@ export function mapRow(
   const montant = mapping.montant
     ? parseFlexibleMontant(raw[mapping.montant])
     : null;
+  const dateReglementRaw = mapping.date_reglement
+    ? raw[mapping.date_reglement]
+    : undefined;
+  const dateReglement = parseFlexibleDate(dateReglementRaw);
   const note = mapping.note ? String(raw[mapping.note] ?? "").trim() : "";
   const email = mapping.email ? String(raw[mapping.email] ?? "").trim() : "";
   const telephone = mapping.telephone
@@ -239,6 +251,14 @@ export function mapRow(
     errors.push("Montant invalide");
   }
 
+  if (
+    dateReglement === null &&
+    dateReglementRaw != null &&
+    String(dateReglementRaw).trim() !== ""
+  ) {
+    errors.push("Date de règlement invalide");
+  }
+
   if (errors.length > 0 || !dateNaissance || !sexe) {
     return { raw, data: null, errors };
   }
@@ -255,6 +275,7 @@ export function mapRow(
       telephone,
       ville: ville || "Sarcelles",
       montant: montant && montant > 0 ? montant : null,
+      date_reglement: dateReglement,
       note,
     },
     errors: [],
