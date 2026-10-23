@@ -90,8 +90,10 @@ const NIVEAU_BASE_PRICE: Partial<Record<Niveau, number>> = {
 
 const SUPPLEMENT_HORS_SARCELLES = 20;
 
-// Le supplément hors Sarcelles ne concerne pas les catégories de U20 à Vétéran.
+// Le supplément hors Sarcelles ne concerne pas les catégories de U19 à Vétéran.
 const CATEGORIES_SANS_SUPPLEMENT_HORS_SARCELLES = new Set([
+  "U19",
+  "U19F",
   "U20",
   "U20F",
   "Senior",
@@ -100,7 +102,7 @@ const CATEGORIES_SANS_SUPPLEMENT_HORS_SARCELLES = new Set([
   "Vétéran F",
 ]);
 
-/** Supplément hors Sarcelles : 0 pour les licenciées et pour U20 à Vétéran. */
+/** Supplément hors Sarcelles : 0 pour les licenciées et pour U19 à Vétéran. */
 export function getSupplementHorsSarcelles(
   categorie: string,
   sexe: "M" | "F",
