@@ -23,8 +23,10 @@ export async function importPlayers(rows: ImportedRow[]) {
     return { error: "Seul un administrateur peut importer des joueurs." };
   }
 
+  const saisonStart = getSaisonStart();
   let imported = 0;
   let skipped = 0;
+  let paymentsCreated = 0;
   const errors: string[] = [];
 
   for (const row of rows) {
@@ -41,18 +43,23 @@ export async function importPlayers(rows: ImportedRow[]) {
       horsSarcelles
     );
 
-    const { error } = await supabase.from("players").insert({
-      nom: row.nom,
-      prenom: row.prenom,
-      date_naissance: row.date_naissance,
-      sexe: row.sexe,
-      email: row.email || null,
-      telephone: row.telephone || null,
-      ville: row.ville,
-      nature: row.nature,
-      hors_sarcelles: horsSarcelles,
-      licence_price: licencePrice,
-    });
+    const { data: inserted, error } = await supabase
+      .from("players")
+      .insert({
+        nom: row.nom,
+        prenom: row.prenom,
+        date_naissance: row.date_naissance,
+        sexe: row.sexe,
+        email: row.email || null,
+        telephone: row.telephone || null,
+        ville: row.ville,
+        nature: row.nature,
+        hors_sarcelles: horsSarcelles,
+        licence_price: licencePrice,
+        notes: row.note || null,
+      })
+      .select("id")
+      .single();
 
     if (error) {
       if (error.code === "23505") {
@@ -63,8 +70,25 @@ export async function importPlayers(rows: ImportedRow[]) {
       continue;
     }
     imported += 1;
+
+    if (row.montant && row.montant > 0) {
+      const { error: paymentError } = await supabase.from("payments").insert({
+        player_id: inserted.id,
+        mode: "non_renseigne",
+        amount: row.montant,
+        saison_start: saisonStart,
+        created_by: user?.id,
+      });
+      if (paymentError) {
+        errors.push(
+          `${row.nom} ${row.prenom} : joueur importé mais paiement non enregistré (${paymentError.message})`
+        );
+      } else {
+        paymentsCreated += 1;
+      }
+    }
   }
 
   revalidatePath("/joueurs");
-  return { imported, skipped, errors };
+  return { imported, skipped, paymentsCreated, errors };
 }

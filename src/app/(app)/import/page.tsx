@@ -43,7 +43,7 @@ export default async function ImportPage() {
         nom, prénom et année de naissance, mais date exacte différente) sont
         signalés « À vérifier » et ne sont pas importés automatiquement : il
         faut cocher « Pas un doublon, importer quand même » après
-        vérification manuelle pour les inclure.
+        vérification manuelle pour les inclure. Les colonnes facultatives « Montant » (enregistré en paiement « Non renseigné ») et « Note » (ajoutée aux notes du joueur) sont aussi prises en compte.
       </p>
       <div className="mt-6">
         <ImportForm existingPlayers={players ?? []} />

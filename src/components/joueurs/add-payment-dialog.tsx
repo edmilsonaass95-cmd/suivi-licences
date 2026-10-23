@@ -45,6 +45,9 @@ const SIMPLE_MODES: Mode[] = [
   "labaz",
   "pass_aglo",
   "pass_sport",
+  "cb",
+  "autre",
+  "non_renseigne",
 ];
 
 export function AddPaymentDialog({ playerId }: { playerId: string }) {

@@ -48,7 +48,7 @@ export default async function DashboardPage() {
     fetchAllRows((from, to) =>
       supabase
         .from("players")
-        .select("id, date_naissance, sexe, nature, niveau, hors_sarcelles, remise")
+        .select("id, date_naissance, sexe, nature, niveau, hors_sarcelles, remise, licence_price")
         .order("id")
         .range(from, to)
     ),
@@ -93,6 +93,7 @@ export default async function DashboardPage() {
         niveau: p.niveau,
         hors_sarcelles: p.hors_sarcelles,
         remise: Number(p.remise),
+        licence_price: Number(p.licence_price),
       })),
       selectedSaison,
       { canWrite }

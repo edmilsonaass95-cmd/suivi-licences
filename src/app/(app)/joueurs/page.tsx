@@ -51,6 +51,7 @@ export default async function JoueursPage() {
     niveau: p.niveau,
     hors_sarcelles: p.hors_sarcelles,
     remise: Number(p.remise),
+    licence_price: Number(p.licence_price),
   }));
 
   const [snapshotByPlayer, { data: paidTotals }, previousData] =

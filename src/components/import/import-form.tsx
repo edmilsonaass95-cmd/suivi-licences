@@ -51,6 +51,7 @@ export function ImportForm({
   const [result, setResult] = useState<{
     imported: number;
     skipped: number;
+    paymentsCreated: number;
     errors: string[];
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -233,6 +234,8 @@ export function ImportForm({
                   <TableHead>Sexe</TableHead>
                   <TableHead>Nature</TableHead>
                   <TableHead>Ville</TableHead>
+                  <TableHead>Montant</TableHead>
+                  <TableHead>Note</TableHead>
                   <TableHead>Statut</TableHead>
                 </TableRow>
               </TableHeader>
@@ -247,6 +250,14 @@ export function ImportForm({
                       {row.data ? NATURE_LABELS[row.data.nature] : "—"}
                     </TableCell>
                     <TableCell>{row.data?.ville ?? "—"}</TableCell>
+                    <TableCell>
+                      {row.data?.montant != null
+                        ? `${row.data.montant} €`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="max-w-40 truncate">
+                      {row.data?.note || "—"}
+                    </TableCell>
                     <TableCell>
                       {!row.data ? (
                         <Badge variant="destructive">
@@ -310,7 +321,14 @@ export function ImportForm({
         <div className="rounded-lg bg-muted p-3 text-sm">
           <p>
             <strong>{result.imported}</strong> joueur(s) importé(s),{" "}
-            <strong>{result.skipped}</strong> doublon(s) ignoré(s).
+            <strong>{result.skipped}</strong> doublon(s) ignoré(s)
+            {result.paymentsCreated > 0 && (
+              <>
+                , <strong>{result.paymentsCreated}</strong> paiement(s)
+                enregistré(s)
+              </>
+            )}
+            .
           </p>
           {result.errors.length > 0 && (
             <ul className="mt-2 list-disc pl-5 text-destructive">

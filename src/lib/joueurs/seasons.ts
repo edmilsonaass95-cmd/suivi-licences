@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCategorieFFF, getSaisonStart, type Sexe } from "@/lib/categorie-fff";
 import { getLicencePrice, type Nature, type Niveau } from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
+import { chunk } from "@/lib/chunk";
 
 export type PlayerAttributes = {
   id: string;
@@ -11,6 +12,8 @@ export type PlayerAttributes = {
   niveau: Niveau;
   hors_sarcelles: boolean;
   remise: number;
+  /** Prix actuellement stocké sur la fiche joueur, pour le resynchroniser si une règle de prix change. */
+  licence_price?: number;
 };
 
 export type PlayerSeasonSnapshot = {
@@ -93,12 +96,23 @@ export async function ensurePlayerSeasons(
   const isLiveSaison = saisonStart >= getSaisonStart();
   const toUpsert: PlayerSeasonSnapshot[] = [];
   const toInsert: PlayerSeasonSnapshot[] = [];
+  const isCurrentSaison = saisonStart === getSaisonStart();
+  const staleIdsByPrice = new Map<number, string[]>();
 
   for (const player of players) {
     if (isLiveSaison) {
       const snapshot = computeSnapshot(player, saisonStart);
       result.set(player.id, snapshot);
       toUpsert.push(snapshot);
+      if (
+        isCurrentSaison &&
+        player.licence_price !== undefined &&
+        Math.abs(player.licence_price - snapshot.licence_price) > 0.001
+      ) {
+        const ids = staleIdsByPrice.get(snapshot.licence_price) ?? [];
+        ids.push(player.id);
+        staleIdsByPrice.set(snapshot.licence_price, ids);
+      }
     } else if (!existingIds.has(player.id)) {
       const snapshot = computeSnapshot(player, saisonStart);
       result.set(player.id, snapshot);
@@ -114,6 +128,17 @@ export async function ensurePlayerSeasons(
       { onConflict: "player_id,saison_start" }
     );
     if (error) console.error("ensurePlayerSeasons upsert:", error.message);
+  }
+  // Une règle de prix a changé : le prix stocké sur la fiche (utilisé par les
+  // soldes, relances et exports) est resynchronisé sur le prix recalculé.
+  for (const [price, ids] of staleIdsByPrice) {
+    for (const batch of chunk(ids, 150)) {
+      const { error } = await supabase
+        .from("players")
+        .update({ licence_price: price })
+        .in("id", batch);
+      if (error) console.error("ensurePlayerSeasons price sync:", error.message);
+    }
   }
   if (toInsert.length > 0) {
     const { error } = await supabase.from("player_seasons").insert(toInsert);

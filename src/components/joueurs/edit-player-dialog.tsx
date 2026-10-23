@@ -15,6 +15,7 @@ import {
 } from "@/lib/joueurs/schemas";
 import {
   getLicencePrice,
+  getSupplementHorsSarcelles,
   isHorsSarcelles,
   NATURE_LABELS,
   NATURES,
@@ -204,7 +205,8 @@ export function EditPlayerDialog({
                 {errors.ville.message}
               </p>
             )}
-            {ville && horsSarcelles && (
+            {ville &&
+              getSupplementHorsSarcelles(categorie, sexe, horsSarcelles) > 0 && (
               <p className="text-sm text-muted-foreground">
                 Hors Sarcelles : +20€ appliqués automatiquement.
               </p>

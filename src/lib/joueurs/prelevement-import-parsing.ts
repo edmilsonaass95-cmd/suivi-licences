@@ -1,4 +1,4 @@
-import { parseSpreadsheet } from "@/lib/joueurs/import-parsing";
+import { parseFlexibleMontant, parseSpreadsheet } from "@/lib/joueurs/import-parsing";
 import type { PrelevementStatut } from "@/lib/joueurs/statut-labels";
 
 export type ParsedEcheance = {
@@ -109,7 +109,7 @@ export async function parsePrelevementFile(
     const nomPrenom = String(raw[mapping.nomPrenom!] ?? "").trim();
     const statutRaw = String(raw[mapping.statut!] ?? "").trim();
     const statutKey = statutRaw.toLowerCase();
-    const montant = Number(raw[mapping.montant!]);
+    const montant = parseFlexibleMontant(raw[mapping.montant!]) ?? NaN;
     const date = parseDateTimeFr(raw[mapping.date!]);
 
     if (!ref || !nomPrenom) {

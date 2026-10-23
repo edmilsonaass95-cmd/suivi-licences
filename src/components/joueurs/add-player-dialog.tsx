@@ -12,6 +12,7 @@ import { playerSchema, type PlayerFormInput } from "@/lib/joueurs/schemas";
 import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import {
   getLicencePrice,
+  getSupplementHorsSarcelles,
   isHorsSarcelles,
   NATURE_LABELS,
   NATURES,
@@ -206,7 +207,9 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
                 {errors.ville.message}
               </p>
             )}
-            {ville && horsSarcelles && (
+            {ville &&
+              preview &&
+              getSupplementHorsSarcelles(preview.categorie, sexe, horsSarcelles) > 0 && (
               <p className="text-sm text-muted-foreground">
                 Hors Sarcelles : +20€ appliqués automatiquement.
               </p>

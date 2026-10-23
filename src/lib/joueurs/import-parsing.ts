@@ -10,6 +10,10 @@ export type ImportedRow = {
   email: string;
   telephone: string;
   ville: string;
+  /** Montant déjà réglé (enregistré en paiement « Non renseigné »), ou null. */
+  montant: number | null;
+  /** Note libre, enregistrée dans les notes du joueur. */
+  note: string;
 };
 
 export type ParsedRow = {
@@ -36,6 +40,8 @@ const HEADER_ALIASES: Record<keyof ImportedRow, string[]> = {
   email: ["email", "e-mail", "mail"],
   telephone: ["telephone", "téléphone", "tel", "tél"],
   ville: ["ville", "commune"],
+  montant: ["montant", "montant paye", "montant regle", "montant reglement"],
+  note: ["note", "notes", "commentaire", "remarque"],
 };
 
 function normalizeHeader(header: string): string {
@@ -132,6 +138,16 @@ export function parseFlexibleNature(value: unknown): Nature {
   return "renouvellement";
 }
 
+/** "1 250,50 €" -> 1250.5 ; vide -> null ; texte non numérique -> NaN. */
+export function parseFlexibleMontant(value: unknown): number | null {
+  if (typeof value === "number") return value;
+  const str = String(value ?? "")
+    .replace(/[€\s\u00a0]/g, "")
+    .replace(",", ".");
+  if (str === "") return null;
+  return Number(str);
+}
+
 export async function parseSpreadsheet(
   file: File
 ): Promise<{ headers: string[]; rows: Record<string, unknown>[] }> {
@@ -141,7 +157,9 @@ export async function parseSpreadsheet(
   // Les fichiers CSV sont lus comme texte pour préserver l'encodage UTF-8
   // (les accents) ; XLSX.read sur un buffer brut suppose du binaire.
   const workbook = isCsv
-    ? XLSX.read(await file.text(), { type: "string" })
+    ? // raw: sinon "50,5" est lu comme 505 (virgule = séparateur de milliers)
+      // et les téléphones perdent leur 0 initial.
+      XLSX.read(await file.text(), { type: "string", raw: true })
     : XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, {
@@ -196,6 +214,10 @@ export function mapRow(
   const nature = parseFlexibleNature(
     mapping.nature ? raw[mapping.nature] : undefined
   );
+  const montant = mapping.montant
+    ? parseFlexibleMontant(raw[mapping.montant])
+    : null;
+  const note = mapping.note ? String(raw[mapping.note] ?? "").trim() : "";
   const email = mapping.email ? String(raw[mapping.email] ?? "").trim() : "";
   const telephone = mapping.telephone
     ? String(raw[mapping.telephone] ?? "").trim()
@@ -213,6 +235,10 @@ export function mapRow(
   const sexe = parseFlexibleSexe(sexeRaw);
   if (!sexe) errors.push("Sexe invalide ou manquant (M/F)");
 
+  if (montant !== null && (Number.isNaN(montant) || montant < 0)) {
+    errors.push("Montant invalide");
+  }
+
   if (errors.length > 0 || !dateNaissance || !sexe) {
     return { raw, data: null, errors };
   }
@@ -228,6 +254,8 @@ export function mapRow(
       email,
       telephone,
       ville: ville || "Sarcelles",
+      montant: montant && montant > 0 ? montant : null,
+      note,
     },
     errors: [],
   };

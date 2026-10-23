@@ -100,6 +100,9 @@ export const paymentSchema = z.discriminatedUnion("mode", [
   simpleModeSchema.extend({ mode: z.literal("labaz") }),
   simpleModeSchema.extend({ mode: z.literal("pass_aglo") }),
   simpleModeSchema.extend({ mode: z.literal("pass_sport") }),
+  simpleModeSchema.extend({ mode: z.literal("cb") }),
+  simpleModeSchema.extend({ mode: z.literal("autre") }),
+  simpleModeSchema.extend({ mode: z.literal("non_renseigne") }),
   z.object({
     mode: z.literal("cheque"),
     note: z.string().optional(),
@@ -122,6 +125,9 @@ export const PAYMENT_MODE_LABELS: Record<PaymentFormValues["mode"], string> = {
   labaz: "Labaz",
   pass_aglo: "Pass Aglo",
   pass_sport: "Pass Sport",
+  cb: "CB",
+  autre: "Autre",
+  non_renseigne: "Non renseigné",
 };
 
 export const DEFAULT_AMOUNT_BY_MODE: Partial<

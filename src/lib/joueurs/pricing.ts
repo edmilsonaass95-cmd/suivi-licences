@@ -38,9 +38,9 @@ export const LICENCE_PRICING: Record<string, Pricing> = {
   U19F: { base: 340, mutation: 91.6 },
   U20F: { base: 340, mutation: 91.6 },
   "Senior F": { base: 340, mutation: 91.6 },
-  // Le fichier source ne précise pas de supplément mutation pour les vétérans : 0 par défaut.
-  Vétéran: { base: 200, mutation: 0 },
-  "Vétéran F": { base: 200, mutation: 0 },
+  // Le supplément mutation de 91,60 € s'applique aussi aux vétérans.
+  Vétéran: { base: 200, mutation: 91.6 },
+  "Vétéran F": { base: 200, mutation: 91.6 },
 };
 
 export const NATURES = [
@@ -90,6 +90,27 @@ const NIVEAU_BASE_PRICE: Partial<Record<Niveau, number>> = {
 
 const SUPPLEMENT_HORS_SARCELLES = 20;
 
+// Le supplément hors Sarcelles ne concerne pas les catégories de U20 à Vétéran.
+const CATEGORIES_SANS_SUPPLEMENT_HORS_SARCELLES = new Set([
+  "U20",
+  "U20F",
+  "Senior",
+  "Senior F",
+  "Vétéran",
+  "Vétéran F",
+]);
+
+/** Supplément hors Sarcelles : 0 pour les licenciées et pour U20 à Vétéran. */
+export function getSupplementHorsSarcelles(
+  categorie: string,
+  sexe: "M" | "F",
+  horsSarcelles: boolean
+): number {
+  if (!horsSarcelles || sexe === "F") return 0;
+  if (CATEGORIES_SANS_SUPPLEMENT_HORS_SARCELLES.has(categorie)) return 0;
+  return SUPPLEMENT_HORS_SARCELLES;
+}
+
 export const REMISE_PARENTE = 20;
 
 export function isHorsSarcelles(ville: string): boolean {
@@ -118,8 +139,7 @@ export function getLicencePrice(
   if (!pricing) return 0;
   let price = niveau === "standard" ? pricing.base : (NIVEAU_BASE_PRICE[niveau] ?? pricing.base);
   if (NATURES_AVEC_MUTATION.includes(nature)) price += pricing.mutation;
-  // Le supplément hors Sarcelles ne s'applique pas aux licenciées féminines.
-  if (horsSarcelles && sexe !== "F") price += SUPPLEMENT_HORS_SARCELLES;
+  price += getSupplementHorsSarcelles(categorie, sexe, horsSarcelles);
   price -= remise;
   return Math.max(0, Math.round(price * 100) / 100);
 }
