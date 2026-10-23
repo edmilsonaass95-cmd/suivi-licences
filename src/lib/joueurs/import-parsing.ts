@@ -18,12 +18,6 @@ export type ImportedRow = {
   note: string;
 };
 
-export type ParsedRow = {
-  raw: Record<string, unknown>;
-  data: ImportedRow | null;
-  errors: string[];
-};
-
 const HEADER_ALIASES: Record<keyof ImportedRow, string[]> = {
   nom: ["nom"],
   prenom: ["prenom", "prénom"],
@@ -40,7 +34,16 @@ const HEADER_ALIASES: Record<keyof ImportedRow, string[]> = {
   sexe: ["sexe", "genre"],
   nature: ["nature"],
   email: ["email", "e-mail", "mail"],
-  telephone: ["telephone", "téléphone", "tel", "tél"],
+  telephone: [
+    "telephone",
+    "telephone mobile",
+    "telephone portable",
+    "mobile",
+    "mobile personnel",
+    "portable",
+    "tel",
+    "tel mobile",
+  ],
   ville: ["ville", "commune"],
   montant: ["montant", "montant paye", "montant regle", "montant reglement"],
   date_reglement: [
@@ -205,78 +208,116 @@ export function normalizeYearKey(
   return `${nom.trim().toLowerCase()}|${prenom.trim().toLowerCase()}|${dateNaissance.slice(0, 4)}`;
 }
 
-export function mapRow(
+/** Ligne de l'aperçu d'import : champs en texte, modifiables avant import. */
+export type ImportDraft = {
+  nom: string;
+  prenom: string;
+  date_naissance: string; // YYYY-MM-DD ou texte non reconnu
+  sexe: string; // "M" | "F" ou texte non reconnu
+  nature: Nature;
+  email: string;
+  telephone: string;
+  ville: string;
+  montant: string;
+  date_reglement: string; // YYYY-MM-DD, vide ou texte non reconnu
+  note: string;
+};
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+export function isIsoDate(value: string): boolean {
+  const m = value.match(ISO_DATE);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return (
+    date.getUTCFullYear() === y &&
+    date.getUTCMonth() === mo - 1 &&
+    date.getUTCDate() === d
+  );
+}
+
+function cell(raw: Record<string, unknown>, column?: string): string {
+  return column ? String(raw[column] ?? "").trim() : "";
+}
+
+/** Convertit une ligne brute du fichier en champs texte modifiables. */
+export function rowToDraft(
   raw: Record<string, unknown>,
   mapping: Partial<Record<keyof ImportedRow, string>>
-): ParsedRow {
-  const errors: string[] = [];
-
-  const nom = mapping.nom ? String(raw[mapping.nom] ?? "").trim() : "";
-  const prenom = mapping.prenom
-    ? String(raw[mapping.prenom] ?? "").trim()
-    : "";
-  const dateNaissanceRaw = mapping.date_naissance
-    ? raw[mapping.date_naissance]
-    : undefined;
-  const sexeRaw = mapping.sexe ? raw[mapping.sexe] : undefined;
-  const nature = parseFlexibleNature(
-    mapping.nature ? raw[mapping.nature] : undefined
-  );
-  const montant = mapping.montant
-    ? parseFlexibleMontant(raw[mapping.montant])
-    : null;
-  const dateReglementRaw = mapping.date_reglement
+): ImportDraft {
+  const dateRaw = mapping.date_naissance ? raw[mapping.date_naissance] : "";
+  const reglementRaw = mapping.date_reglement
     ? raw[mapping.date_reglement]
-    : undefined;
-  const dateReglement = parseFlexibleDate(dateReglementRaw);
-  const note = mapping.note ? String(raw[mapping.note] ?? "").trim() : "";
-  const email = mapping.email ? String(raw[mapping.email] ?? "").trim() : "";
-  const telephone = mapping.telephone
-    ? String(raw[mapping.telephone] ?? "").trim()
     : "";
-  const ville = mapping.ville
-    ? String(raw[mapping.ville] ?? "").trim()
-    : "Sarcelles";
+  const sexeRaw = mapping.sexe ? raw[mapping.sexe] : "";
+  const montantRaw = mapping.montant ? raw[mapping.montant] : "";
+  const montant = parseFlexibleMontant(montantRaw);
+
+  return {
+    nom: cell(raw, mapping.nom),
+    prenom: cell(raw, mapping.prenom),
+    date_naissance: parseFlexibleDate(dateRaw) ?? String(dateRaw ?? "").trim(),
+    sexe: parseFlexibleSexe(sexeRaw) ?? String(sexeRaw ?? "").trim(),
+    nature: parseFlexibleNature(
+      mapping.nature ? raw[mapping.nature] : undefined
+    ),
+    email: cell(raw, mapping.email),
+    telephone: cell(raw, mapping.telephone),
+    ville: mapping.ville ? cell(raw, mapping.ville) : "Sarcelles",
+    montant:
+      montant === null
+        ? ""
+        : Number.isNaN(montant)
+          ? String(montantRaw).trim()
+          : String(montant),
+    date_reglement:
+      parseFlexibleDate(reglementRaw) ?? String(reglementRaw ?? "").trim(),
+    note: cell(raw, mapping.note),
+  };
+}
+
+/** Valide une ligne (éventuellement modifiée à la main) : données prêtes à importer ou erreurs. */
+export function validateDraft(draft: ImportDraft): {
+  data: ImportedRow | null;
+  errors: string[];
+} {
+  const errors: string[] = [];
+  const nom = draft.nom.trim();
+  const prenom = draft.prenom.trim();
 
   if (!nom) errors.push("Nom manquant");
   if (!prenom) errors.push("Prénom manquant");
-
-  const dateNaissance = parseFlexibleDate(dateNaissanceRaw);
-  if (!dateNaissance) errors.push("Date de naissance invalide ou manquante");
-
-  const sexe = parseFlexibleSexe(sexeRaw);
+  if (!isIsoDate(draft.date_naissance)) {
+    errors.push("Date de naissance invalide ou manquante");
+  }
+  const sexe = draft.sexe === "M" || draft.sexe === "F" ? draft.sexe : null;
   if (!sexe) errors.push("Sexe invalide ou manquant (M/F)");
 
+  const montant = parseFlexibleMontant(draft.montant);
   if (montant !== null && (Number.isNaN(montant) || montant < 0)) {
     errors.push("Montant invalide");
   }
-
-  if (
-    dateReglement === null &&
-    dateReglementRaw != null &&
-    String(dateReglementRaw).trim() !== ""
-  ) {
+  const dateReglement = draft.date_reglement.trim();
+  if (dateReglement !== "" && !isIsoDate(dateReglement)) {
     errors.push("Date de règlement invalide");
   }
 
-  if (errors.length > 0 || !dateNaissance || !sexe) {
-    return { raw, data: null, errors };
-  }
+  if (errors.length > 0 || !sexe) return { data: null, errors };
 
   return {
-    raw,
     data: {
       nom,
       prenom,
-      date_naissance: dateNaissance,
+      date_naissance: draft.date_naissance,
       sexe,
-      nature,
-      email,
-      telephone,
-      ville: ville || "Sarcelles",
+      nature: draft.nature,
+      email: draft.email.trim(),
+      telephone: draft.telephone.trim(),
+      ville: draft.ville.trim() || "Sarcelles",
       montant: montant && montant > 0 ? montant : null,
-      date_reglement: dateReglement,
-      note,
+      date_reglement: dateReglement || null,
+      note: draft.note.trim(),
     },
     errors: [],
   };

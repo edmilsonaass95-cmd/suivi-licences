@@ -19,8 +19,13 @@ export default async function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold">Import</h1>
         <p className="mt-2 text-muted-foreground">
-          Cette page est réservée aux administrateurs.
-        </p>
+        Importe une liste de joueurs depuis un fichier CSV ou Excel, puis
+        vérifie l&apos;aperçu : chaque cellule est modifiable et chaque ligne a
+        un statut que tu choisis (« À importer », « Ignoré » ou « Supprimer »).
+        Les doublons et les homonymes sont proposés « Ignoré ». Colonnes
+        facultatives : « Montant » (enregistré en paiement « Non renseigné »),
+        « Date de règlement » et « Note ».
+      </p>
       </div>
     );
   }

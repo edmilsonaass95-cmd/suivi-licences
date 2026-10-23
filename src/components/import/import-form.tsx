@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { UploadIcon } from "lucide-react";
@@ -8,17 +8,19 @@ import { UploadIcon } from "lucide-react";
 import { importPlayers } from "@/app/(app)/import/actions";
 import {
   detectColumnMapping,
-  mapRow,
+  isIsoDate,
   normalizeKey,
   normalizeYearKey,
   parseSpreadsheet,
+  rowToDraft,
+  validateDraft,
+  type ImportDraft,
   type ImportedRow,
 } from "@/lib/joueurs/import-parsing";
 import { formatDateFr } from "@/lib/date";
-import { NATURE_LABELS } from "@/lib/joueurs/pricing";
+import { NATURE_LABELS, NATURES, type Nature } from "@/lib/joueurs/pricing";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -30,21 +32,152 @@ import {
 
 type ExistingPlayer = { nom: string; prenom: string; date_naissance: string };
 
-type PreviewRow = {
+type Action = "importer" | "ignorer";
+
+/** `choice` = choix manuel de l'utilisateur ; sinon le statut proposé s'applique. */
+type Row = { id: number; draft: ImportDraft; choice: Action | null };
+
+type RowStatus = {
   data: ImportedRow | null;
   errors: string[];
   isDuplicate: boolean;
   yearDuplicateDates: string[] | null;
-  forceImport: boolean;
-  key: string | null;
+  /** Statut proposé automatiquement. */
+  suggested: Action;
 };
+
+const CELL_CLASS =
+  "h-7 w-full min-w-0 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30";
+
+const STATUS_CLASS: Record<Action, string> = {
+  importer: "border-primary/50 bg-primary/10 font-medium text-primary",
+  ignorer:
+    "border-amber-500 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-400",
+};
+
+function sameStatus(a: RowStatus, b: RowStatus) {
+  return (
+    a.suggested === b.suggested &&
+    a.isDuplicate === b.isDuplicate &&
+    a.errors.join("|") === b.errors.join("|") &&
+    (a.yearDuplicateDates ?? []).join("|") ===
+      (b.yearDuplicateDates ?? []).join("|")
+  );
+}
+
+type RowEditorProps = {
+  row: Row;
+  status: RowStatus;
+  onChange: (id: number, patch: Partial<ImportDraft>) => void;
+  onSetStatus: (id: number, value: Action | "supprimer") => void;
+};
+
+const RowEditor = memo(
+  function RowEditor({ row, status, onChange, onSetStatus }: RowEditorProps) {
+    const { draft, id } = row;
+    const effective: Action = row.choice ?? status.suggested;
+    const text = (field: keyof ImportDraft, width?: string) => (
+      <input
+        className={CELL_CLASS}
+        style={width ? { minWidth: width } : undefined}
+        value={draft[field] as string}
+        onChange={(e) => onChange(id, { [field]: e.target.value })}
+      />
+    );
+    const date = (field: "date_naissance" | "date_reglement") => (
+      <input
+        type="date"
+        className={CELL_CLASS}
+        style={{ minWidth: "8.5rem" }}
+        value={isIsoDate(draft[field]) ? draft[field] : ""}
+        onChange={(e) => onChange(id, { [field]: e.target.value })}
+      />
+    );
+
+    return (
+      <TableRow>
+        <TableCell className="align-top">
+          <select
+            className={`${CELL_CLASS} ${STATUS_CLASS[effective]}`}
+            style={{ minWidth: "9rem" }}
+            value={effective}
+            onChange={(e) =>
+              onSetStatus(id, e.target.value as Action | "supprimer")
+            }
+          >
+            <option value="importer">À importer</option>
+            <option value="ignorer">
+              {status.isDuplicate ? "Ignoré (doublon)" : "Ignoré"}
+            </option>
+            <option value="supprimer">Supprimer</option>
+          </select>
+          {status.errors.length > 0 && (
+            <p className="mt-1 max-w-40 text-xs text-destructive">
+              {status.errors.join(", ")}
+            </p>
+          )}
+          {status.isDuplicate && (
+            <p className="mt-1 max-w-40 text-xs text-amber-600 dark:text-amber-400">
+              Déjà présent (même nom, prénom et naissance)
+            </p>
+          )}
+          {!status.isDuplicate && status.yearDuplicateDates && (
+            <p className="mt-1 max-w-40 text-xs text-amber-600 dark:text-amber-400">
+              Homonyme possible, né(e) le{" "}
+              {status.yearDuplicateDates.map((d) => formatDateFr(d)).join(", ")}
+            </p>
+          )}
+        </TableCell>
+        <TableCell className="align-top">{text("nom", "7rem")}</TableCell>
+        <TableCell className="align-top">{text("prenom", "7rem")}</TableCell>
+        <TableCell className="align-top">{date("date_naissance")}</TableCell>
+        <TableCell className="align-top">
+          <select
+            className={CELL_CLASS}
+            style={{ minWidth: "3.5rem" }}
+            value={draft.sexe === "M" || draft.sexe === "F" ? draft.sexe : ""}
+            onChange={(e) => onChange(id, { sexe: e.target.value })}
+          >
+            <option value="">—</option>
+            <option value="M">M</option>
+            <option value="F">F</option>
+          </select>
+        </TableCell>
+        <TableCell className="align-top">
+          <select
+            className={CELL_CLASS}
+            style={{ minWidth: "9rem" }}
+            value={draft.nature}
+            onChange={(e) =>
+              onChange(id, { nature: e.target.value as Nature })
+            }
+          >
+            {NATURES.map((n) => (
+              <option key={n} value={n}>
+                {NATURE_LABELS[n]}
+              </option>
+            ))}
+          </select>
+        </TableCell>
+        <TableCell className="align-top">{text("ville", "7rem")}</TableCell>
+        <TableCell className="align-top">{text("email", "10rem")}</TableCell>
+        <TableCell className="align-top">{text("telephone", "7rem")}</TableCell>
+        <TableCell className="align-top">{text("montant", "4.5rem")}</TableCell>
+        <TableCell className="align-top">{date("date_reglement")}</TableCell>
+        <TableCell className="align-top">{text("note", "8rem")}</TableCell>
+      </TableRow>
+    );
+  },
+  (prev, next) =>
+    prev.row === next.row && sameStatus(prev.status, next.status)
+);
 
 export function ImportForm({
   existingPlayers,
 }: {
   existingPlayers: ExistingPlayer[];
 }) {
-  const [rows, setRows] = useState<PreviewRow[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -55,20 +188,73 @@ export function ImportForm({
     errors: string[];
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const nextId = useRef(1);
   const router = useRouter();
 
-  const existingSet = new Set(
-    existingPlayers.map((p) =>
-      normalizeKey(p.nom, p.prenom, p.date_naissance)
-    )
-  );
-  const existingYearMap = new Map<string, string[]>();
-  for (const p of existingPlayers) {
-    const yearKey = normalizeYearKey(p.nom, p.prenom, p.date_naissance);
-    const dates = existingYearMap.get(yearKey) ?? [];
-    dates.push(p.date_naissance);
-    existingYearMap.set(yearKey, dates);
-  }
+  const { existingSet, existingYearMap } = useMemo(() => {
+    const set = new Set(
+      existingPlayers.map((p) =>
+        normalizeKey(p.nom, p.prenom, p.date_naissance)
+      )
+    );
+    const yearMap = new Map<string, string[]>();
+    for (const p of existingPlayers) {
+      const yearKey = normalizeYearKey(p.nom, p.prenom, p.date_naissance);
+      const dates = yearMap.get(yearKey) ?? [];
+      dates.push(p.date_naissance);
+      yearMap.set(yearKey, dates);
+    }
+    return { existingSet: set, existingYearMap: yearMap };
+  }, [existingPlayers]);
+
+  // Statut proposé pour chaque ligne, recalculé à chaque modification :
+  // les lignes en erreur, les doublons et les homonymes sont proposés
+  // « Ignoré », le reste « À importer ». L'utilisateur peut tout changer.
+  const statuses = useMemo<RowStatus[]>(() => {
+    const seenInFile = new Set<string>();
+    const seenYearInFile = new Map<string, string[]>();
+    return rows.map((row) => {
+      const { data, errors } = validateDraft(row.draft);
+      if (!data) {
+        return {
+          data: null,
+          errors,
+          isDuplicate: false,
+          yearDuplicateDates: null,
+          suggested: "ignorer",
+        };
+      }
+      const key = normalizeKey(data.nom, data.prenom, data.date_naissance);
+      const isDuplicate = existingSet.has(key) || seenInFile.has(key);
+      seenInFile.add(key);
+
+      const yearKey = normalizeYearKey(
+        data.nom,
+        data.prenom,
+        data.date_naissance
+      );
+      let yearDuplicateDates: string[] | null = null;
+      if (!isDuplicate) {
+        const collisions = [
+          ...(existingYearMap.get(yearKey) ?? []),
+          ...(seenYearInFile.get(yearKey) ?? []),
+        ];
+        if (collisions.length > 0) yearDuplicateDates = collisions;
+      }
+      seenYearInFile.set(yearKey, [
+        ...(seenYearInFile.get(yearKey) ?? []),
+        data.date_naissance,
+      ]);
+
+      return {
+        data,
+        errors: [],
+        isDuplicate,
+        yearDuplicateDates,
+        suggested: isDuplicate || yearDuplicateDates ? "ignorer" : "importer",
+      };
+    });
+  }, [rows, existingSet, existingYearMap]);
 
   const handleFile = async (file: File) => {
     setParsing(true);
@@ -76,58 +262,13 @@ export function ImportForm({
     try {
       const { headers, rows: rawRows } = await parseSpreadsheet(file);
       const mapping = detectColumnMapping(headers);
-
-      const seenInFile = new Set<string>();
-      const seenYearInFile = new Map<string, string[]>();
-      const preview: PreviewRow[] = rawRows.map((raw) => {
-        const parsed = mapRow(raw, mapping);
-        if (!parsed.data) {
-          return {
-            data: null,
-            errors: parsed.errors,
-            isDuplicate: false,
-            yearDuplicateDates: null,
-            forceImport: false,
-            key: null,
-          };
-        }
-        const key = normalizeKey(
-          parsed.data.nom,
-          parsed.data.prenom,
-          parsed.data.date_naissance
-        );
-        const isDuplicate = existingSet.has(key) || seenInFile.has(key);
-        seenInFile.add(key);
-
-        let yearDuplicateDates: string[] | null = null;
-        const yearKey = normalizeYearKey(
-          parsed.data.nom,
-          parsed.data.prenom,
-          parsed.data.date_naissance
-        );
-        if (!isDuplicate) {
-          const collisions = [
-            ...(existingYearMap.get(yearKey) ?? []),
-            ...(seenYearInFile.get(yearKey) ?? []),
-          ];
-          if (collisions.length > 0) yearDuplicateDates = collisions;
-        }
-        seenYearInFile.set(yearKey, [
-          ...(seenYearInFile.get(yearKey) ?? []),
-          parsed.data.date_naissance,
-        ]);
-
-        return {
-          data: parsed.data,
-          errors: [],
-          isDuplicate,
-          yearDuplicateDates,
-          forceImport: false,
-          key,
-        };
-      });
-
-      setRows(preview);
+      setRows(
+        rawRows.map((raw) => ({
+          id: nextId.current++,
+          draft: rowToDraft(raw, mapping),
+          choice: null,
+        }))
+      );
       setFileName(file.name);
     } catch {
       toast.error("Impossible de lire ce fichier", {
@@ -138,24 +279,42 @@ export function ImportForm({
     }
   };
 
-  const importable = rows.filter(
-    (r) =>
-      r.data && !r.isDuplicate && (!r.yearDuplicateDates || r.forceImport)
+  const handleChange = useCallback(
+    (id: number, patch: Partial<ImportDraft>) => {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, draft: { ...r.draft, ...patch } } : r
+        )
+      );
+    },
+    []
   );
 
-  const toggleForceImport = (index: number) => {
-    setRows((prev) =>
-      prev.map((r, i) =>
-        i === index ? { ...r, forceImport: !r.forceImport } : r
-      )
-    );
-  };
+  const handleSetStatus = useCallback(
+    (id: number, value: Action | "supprimer") => {
+      setRows((prev) =>
+        value === "supprimer"
+          ? prev.filter((r) => r.id !== id)
+          : prev.map((r) => (r.id === id ? { ...r, choice: value } : r))
+      );
+    },
+    []
+  );
+
+  const importable: ImportedRow[] = [];
+  let nbIgnored = 0;
+  let nbToFix = 0;
+  rows.forEach((row, i) => {
+    const s = statuses[i];
+    const effective = row.choice ?? s.suggested;
+    if (effective === "ignorer") nbIgnored++;
+    else if (s.data) importable.push(s.data);
+    else nbToFix++;
+  });
 
   const handleImport = async () => {
     setImporting(true);
-    const summary = await importPlayers(
-      importable.map((r) => r.data as ImportedRow)
-    );
+    const summary = await importPlayers(importable);
     setImporting(false);
 
     if ("error" in summary) {
@@ -197,115 +356,51 @@ export function ImportForm({
 
       {rows.length > 0 && (
         <>
+          <p className="text-sm text-muted-foreground">
+            Modifie n&apos;importe quelle cellule, et choisis pour chaque ligne
+            son statut : « À importer », « Ignoré » ou « Supprimer » (retire la
+            ligne de la liste).
+          </p>
           <div className="flex flex-wrap gap-2 text-sm">
-            <Badge variant="outline">{rows.length} ligne(s) lues</Badge>
+            <Badge variant="outline">{rows.length} ligne(s)</Badge>
             <Badge>{importable.length} à importer</Badge>
             <Badge className="border-transparent bg-amber-500 text-white">
-              {rows.filter((r) => r.data && r.isDuplicate).length} doublon(s)
-              ignoré(s)
+              {nbIgnored} ignorée(s)
             </Badge>
-            <Badge
-              variant="outline"
-              className="border-amber-500 text-amber-600 dark:text-amber-400"
-            >
-              {
-                rows.filter(
-                  (r) =>
-                    r.data &&
-                    !r.isDuplicate &&
-                    r.yearDuplicateDates &&
-                    !r.forceImport
-                ).length
-              }{" "}
-              à vérifier manuellement (non importé)
-            </Badge>
-            <Badge variant="destructive">
-              {rows.filter((r) => !r.data).length} ligne(s) invalide(s)
-            </Badge>
+            {nbToFix > 0 && (
+              <Badge variant="destructive">
+                {nbToFix} à corriger (erreur)
+              </Badge>
+            )}
           </div>
 
-          <div className="max-h-96 overflow-auto rounded-xl ring-1 ring-foreground/10">
+          <div className="max-h-[70vh] overflow-auto rounded-xl ring-1 ring-foreground/10">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Statut</TableHead>
                   <TableHead>Nom</TableHead>
                   <TableHead>Prénom</TableHead>
                   <TableHead>Naissance</TableHead>
                   <TableHead>Sexe</TableHead>
                   <TableHead>Nature</TableHead>
                   <TableHead>Ville</TableHead>
+                  <TableHead>E-mail</TableHead>
+                  <TableHead>Téléphone</TableHead>
                   <TableHead>Montant</TableHead>
                   <TableHead>Date règl.</TableHead>
                   <TableHead>Note</TableHead>
-                  <TableHead>Statut</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell>{row.data?.nom ?? "—"}</TableCell>
-                    <TableCell>{row.data?.prenom ?? "—"}</TableCell>
-                    <TableCell>{row.data?.date_naissance ?? "—"}</TableCell>
-                    <TableCell>{row.data?.sexe ?? "—"}</TableCell>
-                    <TableCell>
-                      {row.data ? NATURE_LABELS[row.data.nature] : "—"}
-                    </TableCell>
-                    <TableCell>{row.data?.ville ?? "—"}</TableCell>
-                    <TableCell>
-                      {row.data?.montant != null
-                        ? `${row.data.montant} €`
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {row.data?.date_reglement
-                        ? formatDateFr(row.data.date_reglement)
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="max-w-40 truncate">
-                      {row.data?.note || "—"}
-                    </TableCell>
-                    <TableCell>
-                      {!row.data ? (
-                        <Badge variant="destructive">
-                          {row.errors.join(", ")}
-                        </Badge>
-                      ) : row.isDuplicate ? (
-                        <Badge className="border-transparent bg-amber-500 text-white">
-                          Ignoré (doublon)
-                        </Badge>
-                      ) : row.yearDuplicateDates ? (
-                        <div className="space-y-1">
-                          <Badge
-                            variant="outline"
-                            className={
-                              row.forceImport
-                                ? "border-transparent bg-primary text-primary-foreground"
-                                : "border-amber-500 text-amber-600 dark:text-amber-400"
-                            }
-                          >
-                            {row.forceImport
-                              ? "Sera importé"
-                              : "À vérifier — non importé"}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground">
-                            Homonyme déjà présent, né(e) le{" "}
-                            {row.yearDuplicateDates
-                              .map((d) => formatDateFr(d))
-                              .join(", ")}
-                          </p>
-                          <label className="flex items-center gap-1.5 text-xs">
-                            <Checkbox
-                              checked={row.forceImport}
-                              onCheckedChange={() => toggleForceImport(i)}
-                            />
-                            Pas un doublon, importer quand même
-                          </label>
-                        </div>
-                      ) : (
-                        <Badge>À importer</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                  <RowEditor
+                    key={row.id}
+                    row={row}
+                    status={statuses[i]}
+                    onChange={handleChange}
+                    onSetStatus={handleSetStatus}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -327,7 +422,7 @@ export function ImportForm({
         <div className="rounded-lg bg-muted p-3 text-sm">
           <p>
             <strong>{result.imported}</strong> joueur(s) importé(s),{" "}
-            <strong>{result.skipped}</strong> doublon(s) ignoré(s)
+            <strong>{result.skipped}</strong> refusé(s) car déjà présent(s)
             {result.paymentsCreated > 0 && (
               <>
                 , <strong>{result.paymentsCreated}</strong> paiement(s)
