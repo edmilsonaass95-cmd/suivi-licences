@@ -20,6 +20,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -61,6 +68,10 @@ export type EditablePayment = {
 
 export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
   const [open, setOpen] = useState(false);
+  // Le mode ne peut changer que pour un paiement simple (par ex. un montant
+  // importé « Non renseigné ») : un chèque ou un prélèvement a ses propres lignes.
+  const canChangeMode = SIMPLE_MODES.includes(payment.mode);
+  const [mode, setMode] = useState<Mode>(payment.mode);
   const [amount, setAmount] = useState(String(payment.amount));
   const [note, setNote] = useState(payment.note ?? "");
   const [cheques, setCheques] = useState<ChequeRow[]>(
@@ -91,9 +102,9 @@ export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
     setSubmitting(true);
 
     let values: unknown;
-    if (payment.mode === "cheque") {
+    if (mode === "cheque") {
       values = {
-        mode: payment.mode,
+        mode,
         note: note || undefined,
         cheques: cheques.map((c) => ({
           id: c.id,
@@ -103,9 +114,9 @@ export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
           numero_cheque: c.numero_cheque || undefined,
         })),
       };
-    } else if (payment.mode === "prelevement") {
+    } else if (mode === "prelevement") {
       values = {
-        mode: payment.mode,
+        mode,
         note: note || undefined,
         echeances: echeances.map((row) => ({
           id: row.id,
@@ -115,7 +126,7 @@ export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
       };
     } else {
       values = {
-        mode: payment.mode,
+        mode,
         amount: Number(amount),
         note: note || undefined,
       };
@@ -137,7 +148,13 @@ export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setMode(payment.mode);
+      }}
+    >
       <Button
         variant="ghost"
         size="icon-sm"
@@ -149,12 +166,34 @@ export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Modifier le paiement</DialogTitle>
-          <DialogDescription>
-            {PAYMENT_MODE_LABELS[payment.mode]}
-          </DialogDescription>
+          {!canChangeMode && (
+            <DialogDescription>
+              {PAYMENT_MODE_LABELS[payment.mode]}
+            </DialogDescription>
+          )}
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {SIMPLE_MODES.includes(payment.mode) && (
+          {canChangeMode && (
+            <div className="space-y-1.5">
+              <Label>Mode de paiement</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as Mode)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(v: string) => PAYMENT_MODE_LABELS[v as Mode]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PAYMENT_MODE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {SIMPLE_MODES.includes(mode) && (
             <div className="space-y-1.5">
               <Label htmlFor="edit-amount">Montant (€)</Label>
               <Input
@@ -169,11 +208,11 @@ export function EditPaymentDialog({ payment }: { payment: EditablePayment }) {
             </div>
           )}
 
-          {payment.mode === "cheque" && (
+          {mode === "cheque" && (
             <ChequesFields rows={cheques} onChange={setCheques} />
           )}
 
-          {payment.mode === "prelevement" && (
+          {mode === "prelevement" && (
             <EcheancesFields rows={echeances} onChange={setEcheances} />
           )}
 

@@ -438,8 +438,16 @@ export async function updatePayment(paymentId: string, values: unknown) {
     return { error: fetchError?.message ?? "Paiement introuvable" };
   }
 
-  if (existing.mode !== v.mode) {
-    return { error: "Le mode de paiement ne peut pas être modifié." };
+  // Un chèque ou un prélèvement porte ses propres lignes (échéances) : changer
+  // son mode les ferait disparaître, on le refuse.
+  if (
+    existing.mode !== v.mode &&
+    (existing.mode === "cheque" || existing.mode === "prelevement")
+  ) {
+    return {
+      error:
+        "Le mode d'un chèque ou d'un prélèvement ne peut pas être modifié : supprime ce paiement et crée-en un nouveau.",
+    };
   }
 
   const amount =
@@ -451,7 +459,7 @@ export async function updatePayment(paymentId: string, values: unknown) {
 
   const { error } = await supabase
     .from("payments")
-    .update({ amount, note: v.note || null })
+    .update({ mode: v.mode, amount, note: v.note || null })
     .eq("id", paymentId);
 
   if (error) return { error: error.message };
