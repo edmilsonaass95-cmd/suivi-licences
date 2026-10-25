@@ -195,6 +195,8 @@ export async function createPlayer(values: unknown) {
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
       remise_lien_joueur_id:
         v.remise_motif === "parente" ? v.remise_lien_joueur_id : null,
+      remise_note:
+        v.remise_motif === "aucune" ? null : v.remise_note?.trim() || null,
       licence_price: licencePrice,
       notes: v.notes || null,
     })
@@ -276,6 +278,8 @@ export async function updatePlayer(playerId: string, values: unknown) {
       remise_motif: v.remise_motif === "aucune" ? null : v.remise_motif,
       remise_lien_joueur_id:
         v.remise_motif === "parente" ? v.remise_lien_joueur_id : null,
+      remise_note:
+        v.remise_motif === "aucune" ? null : v.remise_note?.trim() || null,
       licence_price: licencePrice,
     })
     .eq("id", playerId);

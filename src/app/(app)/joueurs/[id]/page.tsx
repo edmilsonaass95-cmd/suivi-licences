@@ -172,6 +172,7 @@ export default async function PlayerDetailPage({
                 remise: Number(player.remise ?? 0),
                 remise_motif: player.remise_motif,
                 remise_lien_joueur_id: player.remise_lien_joueur_id,
+                remise_note: player.remise_note,
               }}
               players={(allPlayers ?? []).map((p) => ({
                 id: p.id,
@@ -251,6 +252,12 @@ export default async function PlayerDetailPage({
                 })`
               : "Aucune"}
           </p>
+          {player.remise_motif && player.remise_note && (
+            <p className="sm:col-span-2">
+              <span className="text-muted-foreground">Note de remise : </span>
+              {player.remise_note}
+            </p>
+          )}
           {player.notes && (
             <p className="sm:col-span-2">
               <span className="text-muted-foreground">Notes : </span>

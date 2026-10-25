@@ -14,6 +14,7 @@ const remiseFields = {
   remise_motif: z.enum(remiseMotifs).default("aucune"),
   remise: z.coerce.number().nonnegative("Le montant doit être positif ou nul").default(0),
   remise_lien_joueur_id: z.string().optional(),
+  remise_note: z.string().optional(),
 };
 
 function checkRemise(

@@ -28,6 +28,8 @@ export function RemiseFields({
   linkedPlayerId,
   onLinkedPlayerChange,
   linkedError,
+  note,
+  onNoteChange,
 }: {
   motif: RemiseMotif;
   remise: number | string;
@@ -38,6 +40,8 @@ export function RemiseFields({
   linkedPlayerId: string | undefined;
   onLinkedPlayerChange: (id: string) => void;
   linkedError?: string;
+  note: string;
+  onNoteChange: (value: string) => void;
 }) {
   return (
     <div className="col-span-2 space-y-1.5">
@@ -108,6 +112,21 @@ export function RemiseFields({
             onChange={(e) => onRemiseChange(e.target.value)}
           />
           {error && <p className="text-sm text-destructive">{error}</p>}
+        </>
+      )}
+
+      {motif !== "aucune" && (
+        <>
+          <Label htmlFor="remise-note" className="pt-1.5">
+            Note (facultatif)
+          </Label>
+          <Input
+            id="remise-note"
+            type="text"
+            placeholder="Ex. : frère de Jean, geste du club..."
+            value={note}
+            onChange={(e) => onNoteChange(e.target.value)}
+          />
         </>
       )}
     </div>

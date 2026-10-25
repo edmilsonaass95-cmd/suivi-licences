@@ -68,6 +68,7 @@ export function EditPlayerDialog({
     remise: number;
     remise_motif: "parente" | "autre" | null;
     remise_lien_joueur_id: string | null;
+    remise_note: string | null;
   };
   players: PlayerOption[];
 }) {
@@ -91,6 +92,7 @@ export function EditPlayerDialog({
       remise_motif: initial.remise_motif ?? "aucune",
       remise: initial.remise_motif === "autre" ? initial.remise : 0,
       remise_lien_joueur_id: initial.remise_lien_joueur_id ?? "",
+      remise_note: initial.remise_note ?? "",
     },
   });
 
@@ -100,6 +102,7 @@ export function EditPlayerDialog({
   const remiseMotif = (watch("remise_motif") ?? "aucune") as RemiseMotif;
   const remise = watch("remise") ?? 0;
   const remiseLienJoueurId = watch("remise_lien_joueur_id");
+  const remiseNote = watch("remise_note");
   const otherPlayers = players.filter((p) => p.id !== playerId);
   const horsSarcelles = isHorsSarcelles(ville ?? "");
   const prix = getLicencePrice(
@@ -220,6 +223,7 @@ export function EditPlayerDialog({
               setValue("remise_motif", m);
               if (m !== "autre") setValue("remise", 0);
               if (m !== "parente") setValue("remise_lien_joueur_id", "");
+              if (m === "aucune") setValue("remise_note", "");
             }}
             onRemiseChange={(v) => setValue("remise", v as unknown as number)}
             error={errors.remise?.message}
@@ -229,6 +233,8 @@ export function EditPlayerDialog({
               setValue("remise_lien_joueur_id", id)
             }
             linkedError={errors.remise_lien_joueur_id?.message}
+            note={remiseNote ?? ""}
+            onNoteChange={(v) => setValue("remise_note", v)}
           />
 
           <div className="col-span-2 rounded-lg bg-muted p-3 text-sm">

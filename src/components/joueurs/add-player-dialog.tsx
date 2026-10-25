@@ -69,6 +69,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
       remise_motif: "aucune",
       remise: 0,
       remise_lien_joueur_id: "",
+      remise_note: "",
     },
   });
 
@@ -80,6 +81,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
   const remiseMotif = watch("remise_motif") ?? "aucune";
   const remise = watch("remise") ?? 0;
   const remiseLienJoueurId = watch("remise_lien_joueur_id");
+  const remiseNote = watch("remise_note");
   const horsSarcelles = isHorsSarcelles(ville ?? "");
 
   let preview: { categorie: string; prix: number } | null = null;
@@ -265,6 +267,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
               setValue("remise_motif", m);
               if (m !== "autre") setValue("remise", 0);
               if (m !== "parente") setValue("remise_lien_joueur_id", "");
+              if (m === "aucune") setValue("remise_note", "");
             }}
             onRemiseChange={(v) => setValue("remise", v as unknown as number)}
             error={errors.remise?.message}
@@ -274,6 +277,8 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
               setValue("remise_lien_joueur_id", id)
             }
             linkedError={errors.remise_lien_joueur_id?.message}
+            note={remiseNote ?? ""}
+            onNoteChange={(v) => setValue("remise_note", v)}
           />
 
           {preview && (
