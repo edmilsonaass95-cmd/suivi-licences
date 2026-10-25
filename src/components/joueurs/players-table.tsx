@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -54,6 +54,79 @@ import { PLAYER_STATUT_LABEL } from "@/lib/joueurs/statut-labels";
 
 const DELETE_BATCH_SIZE = 150;
 
+// Les filtres sont gardés le temps de la session : en revenant d'une fiche
+// joueur, la liste retrouve les filtres qui étaient posés.
+const FILTERS_STORAGE_KEY = "joueurs-filtres";
+
+type Filters = {
+  search: string;
+  categorie: string;
+  genre: string;
+  statut: string;
+  niveau: string;
+  nature: string;
+};
+
+const DEFAULT_FILTERS: Filters = {
+  search: "",
+  categorie: "toutes",
+  genre: "tous",
+  statut: "tous",
+  niveau: "tous",
+  nature: "toutes",
+};
+
+const filterListeners = new Set<() => void>();
+// Copie en mémoire, au cas où sessionStorage serait indisponible.
+let filtersRaw = "";
+
+function subscribeFilters(listener: () => void) {
+  filterListeners.add(listener);
+  return () => {
+    filterListeners.delete(listener);
+  };
+}
+
+function getFiltersSnapshot() {
+  try {
+    return sessionStorage.getItem(FILTERS_STORAGE_KEY) ?? filtersRaw;
+  } catch {
+    return filtersRaw;
+  }
+}
+
+function getFiltersServerSnapshot() {
+  return "";
+}
+
+function writeFilters(filters: Filters) {
+  filtersRaw = JSON.stringify(filters);
+  try {
+    sessionStorage.setItem(FILTERS_STORAGE_KEY, filtersRaw);
+  } catch {
+    // stockage indisponible : les filtres restent juste en mémoire
+  }
+  filterListeners.forEach((listener) => listener());
+}
+
+function usePersistedFilters() {
+  const raw = useSyncExternalStore(
+    subscribeFilters,
+    getFiltersSnapshot,
+    getFiltersServerSnapshot
+  );
+  const filters = useMemo<Filters>(() => {
+    try {
+      return { ...DEFAULT_FILTERS, ...(raw ? JSON.parse(raw) : {}) };
+    } catch {
+      return DEFAULT_FILTERS;
+    }
+  }, [raw]);
+  const setFilter = (key: keyof Filters, value: string) =>
+    writeFilters({ ...filters, [key]: value });
+  return { filters, setFilter };
+}
+
 function statutLabel(paid: number, expected: number) {
   if (expected > 0 && paid >= expected) return "Payé";
   if (paid > 0) return "Partiel";
@@ -106,12 +179,8 @@ export function PlayersTable({
   previousSoldeLabel?: string;
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [categorie, setCategorie] = useState("toutes");
-  const [genre, setGenre] = useState("tous");
-  const [statut, setStatut] = useState("tous");
-  const [niveau, setNiveau] = useState("tous");
-  const [nature, setNature] = useState("toutes");
+  const { filters, setFilter } = usePersistedFilters();
+  const { search, categorie, genre, statut, niveau, nature } = filters;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState<string | null>(null);
@@ -292,12 +361,12 @@ export function PlayersTable({
         <Input
           placeholder="Rechercher un joueur..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => setFilter("search", e.target.value)}
           className="max-w-xs"
         />
         <Select
           value={categorie}
-          onValueChange={(v) => setCategorie(v ?? "toutes")}
+          onValueChange={(v) => setFilter("categorie", v ?? "toutes")}
         >
           <SelectTrigger>
             <SelectValue>
@@ -313,7 +382,7 @@ export function PlayersTable({
             ))}
           </SelectContent>
         </Select>
-        <Select value={genre} onValueChange={(v) => setGenre(v ?? "tous")}>
+        <Select value={genre} onValueChange={(v) => setFilter("genre", v ?? "tous")}>
           <SelectTrigger>
             <SelectValue>
               {(v: string) =>
@@ -327,7 +396,7 @@ export function PlayersTable({
             <SelectItem value="F">Féminin</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={niveau} onValueChange={(v) => setNiveau(v ?? "tous")}>
+        <Select value={niveau} onValueChange={(v) => setFilter("niveau", v ?? "tous")}>
           <SelectTrigger>
             <SelectValue>
               {(v: string) =>
@@ -344,7 +413,7 @@ export function PlayersTable({
             ))}
           </SelectContent>
         </Select>
-        <Select value={nature} onValueChange={(v) => setNature(v ?? "toutes")}>
+        <Select value={nature} onValueChange={(v) => setFilter("nature", v ?? "toutes")}>
           <SelectTrigger>
             <SelectValue>
               {(v: string) =>
@@ -361,7 +430,7 @@ export function PlayersTable({
             ))}
           </SelectContent>
         </Select>
-        <Select value={statut} onValueChange={(v) => setStatut(v ?? "tous")}>
+        <Select value={statut} onValueChange={(v) => setFilter("statut", v ?? "tous")}>
           <SelectTrigger>
             <SelectValue>
               {(v: string) => PLAYER_STATUT_LABEL[v] ?? PLAYER_STATUT_LABEL.tous}
