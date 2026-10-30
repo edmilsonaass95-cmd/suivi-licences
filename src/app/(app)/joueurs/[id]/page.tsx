@@ -13,6 +13,7 @@ import { EditPlayerDialog } from "@/components/joueurs/edit-player-dialog";
 import { PaymentHistory, type PaymentRow } from "@/components/joueurs/payment-history";
 import { AttachmentsSection } from "@/components/joueurs/attachments-section";
 import { ExportPlayerPdfButton } from "@/components/joueurs/export-player-pdf-button";
+import { ExportReceiptButton } from "@/components/joueurs/export-receipt-button";
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
 import {
   NATURE_LABELS,
@@ -158,6 +159,7 @@ export default async function PlayerDetailPage({
             }}
             payments={paymentRows}
           />
+          {canWrite && <ExportReceiptButton playerId={player.id} />}
           {canWrite && (
             <EditPlayerDialog
               playerId={player.id}

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
+  PAYMENT_MODE_LABELS,
   paymentSchema,
   playerEditSchema,
   playerSchema,
@@ -11,11 +12,13 @@ import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
 import {
   getLicencePrice,
   isHorsSarcelles,
+  NATURE_LABELS,
   NIVEAUX,
   resolveRemise,
+  type Nature,
+  type Niveau,
 } from "@/lib/joueurs/pricing";
 import { z } from "zod";
-import { parseDateOnly } from "@/lib/date";
 import {
   CHEQUE_STATUT_LABEL,
   PRELEVEMENT_STATUT_LABEL,
@@ -25,7 +28,15 @@ import {
 import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { sendMail } from "@/lib/email";
 import { relanceEmailHtml } from "@/lib/joueurs/relance-email";
-import { upsertCurrentPlayerSeason } from "@/lib/joueurs/seasons";
+import {
+  ensurePlayerSeasons,
+  getMaxKnownSaisonStart,
+  upsertCurrentPlayerSeason,
+} from "@/lib/joueurs/seasons";
+import { getSelectedSaisonStart } from "@/lib/saison-selection-cookie";
+import { saisonLabel } from "@/lib/saison-selection";
+import { formatDateFr, parseDateOnly } from "@/lib/date";
+import type { InvoiceData } from "@/lib/export-invoice";
 import { chunk } from "@/lib/chunk";
 
 // Au-delà de ce nombre d'identifiants, un filtre .in(...) risque de dépasser
@@ -673,4 +684,119 @@ export async function getPaymentsForExport(filters?: {
   }
 
   return { rows };
+}
+
+/**
+ * Données du reçu de paiement d'un joueur pour la saison sélectionnée : seuls
+ * les règlements réellement encaissés y figurent (chèques encaissés,
+ * prélèvements prélevés, paiements simples).
+ */
+export async function getReceiptData(
+  playerId: string
+): Promise<{ data: InvoiceData } | { error: string }> {
+  const { canWrite } = await getCurrentUserRoles();
+  if (!canWrite) {
+    return { error: "Action réservée aux administrateurs et gestionnaires." };
+  }
+
+  const supabase = await createClient();
+  const saison = await getSelectedSaisonStart(
+    await getMaxKnownSaisonStart(supabase)
+  );
+
+  const [{ data: player }, { data: payments, error: paymentsError }] =
+    await Promise.all([
+      supabase.from("players").select("*").eq("id", playerId).maybeSingle(),
+      supabase
+        .from("payments")
+        .select("mode, amount, created_at, cheques(*), prelevements(*)")
+        .eq("player_id", playerId)
+        .eq("saison_start", saison),
+    ]);
+  if (!player) return { error: "Joueur introuvable." };
+  if (paymentsError) return { error: paymentsError.message };
+
+  const snapshot = (
+    await ensurePlayerSeasons(
+      supabase,
+      [
+        {
+          id: player.id,
+          date_naissance: player.date_naissance,
+          sexe: player.sexe as "M" | "F",
+          nature: player.nature as Nature,
+          niveau: player.niveau as Niveau,
+          hors_sarcelles: player.hors_sarcelles,
+          remise: Number(player.remise),
+        },
+      ],
+      saison,
+      { canWrite }
+    )
+  ).get(player.id);
+  if (!snapshot) return { error: "Tarif de la saison introuvable." };
+
+  type Settled = { date: string; sortKey: string; mode: string; montant: number };
+  const settled: Settled[] = [];
+  for (const p of payments ?? []) {
+    if (p.mode === "cheque") {
+      for (const c of p.cheques ?? []) {
+        if (c.statut !== "encaisse") continue;
+        settled.push({
+          date: formatDateFr(c.date_encaissement),
+          sortKey: c.date_encaissement,
+          mode: PAYMENT_MODE_LABELS.cheque,
+          montant: Number(c.montant),
+        });
+      }
+    } else if (p.mode === "prelevement") {
+      for (const e of p.prelevements ?? []) {
+        if (e.statut !== "preleve") continue;
+        settled.push({
+          date: formatDateFr(e.date_prelevement),
+          sortKey: e.date_prelevement,
+          mode: PAYMENT_MODE_LABELS.prelevement,
+          montant: Number(e.montant),
+        });
+      }
+    } else {
+      settled.push({
+        date: formatDateFr(p.created_at),
+        sortKey: p.created_at,
+        mode: PAYMENT_MODE_LABELS[p.mode as keyof typeof PAYMENT_MODE_LABELS],
+        montant: Number(p.amount),
+      });
+    }
+  }
+  if (settled.length === 0) {
+    return { error: "Aucun règlement encaissé pour cette saison." };
+  }
+  settled.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+  const { data: seq, error: seqError } = await supabase.rpc(
+    "get_receipt_number",
+    { _player_id: playerId, _saison_start: saison }
+  );
+  if (seqError || typeof seq !== "number") {
+    return {
+      error: seqError?.message ?? "Impossible d'attribuer un numéro de reçu.",
+    };
+  }
+
+  return {
+    data: {
+      numero: `${saison}-${String(seq).padStart(4, "0")}`,
+      dateEmission: formatDateFr(new Date()),
+      saisonLabel: saisonLabel(saison),
+      player: {
+        nom: player.nom,
+        prenom: player.prenom,
+        dateNaissance: formatDateFr(player.date_naissance),
+        categorie: snapshot.categorie,
+      },
+      natureLabel: NATURE_LABELS[snapshot.nature],
+      licencePrice: snapshot.licence_price,
+      payments: settled.map(({ date, mode, montant }) => ({ date, mode, montant })),
+    },
+  };
 }
