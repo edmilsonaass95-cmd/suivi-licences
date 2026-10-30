@@ -27,21 +27,21 @@ export function ExportReceiptButton({ playerId }: { playerId: string }) {
     try {
       const result = await getReceiptData(playerId);
       if ("error" in result) {
-        toast.error("Impossible de générer le reçu", {
+        toast.error("Impossible de générer la facture", {
           description: result.error,
         });
         return;
       }
       const doc = buildInvoicePdf(result.data, await loadLogo());
       const { nom, prenom } = result.data.player;
-      const filename = `recu-${nom}-${prenom}-${result.data.numero}.pdf`
+      const filename = `facture-${nom}-${prenom}-${result.data.numero}.pdf`
         .toLowerCase()
         .normalize("NFD")
         .replace(/[̀-ͯ]/g, "")
         .replace(/\s+/g, "-");
       doc.save(filename);
     } catch {
-      toast.error("Impossible de générer le reçu");
+      toast.error("Impossible de générer la facture");
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export function ExportReceiptButton({ playerId }: { playerId: string }) {
       disabled={loading}
     >
       <ReceiptTextIcon />
-      {loading ? "Génération..." : "Reçu parent"}
+      {loading ? "Génération..." : "Facture parent"}
     </Button>
   );
 }

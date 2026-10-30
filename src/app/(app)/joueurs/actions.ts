@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
-  PAYMENT_MODE_LABELS,
   paymentSchema,
   playerEditSchema,
   playerSchema,
@@ -687,7 +686,7 @@ export async function getPaymentsForExport(filters?: {
 }
 
 /**
- * Données du reçu de paiement d'un joueur pour la saison sélectionnée : seuls
+ * Données de la facture acquittée d'un joueur pour la saison sélectionnée : seuls
  * les règlements réellement encaissés y figurent (chèques encaissés,
  * prélèvements prélevés, paiements simples).
  */
@@ -736,16 +735,15 @@ export async function getReceiptData(
   ).get(player.id);
   if (!snapshot) return { error: "Tarif de la saison introuvable." };
 
-  type Settled = { date: string; sortKey: string; mode: string; montant: number };
+  type Settled = { sortKey: string; date: string; montant: number };
   const settled: Settled[] = [];
   for (const p of payments ?? []) {
     if (p.mode === "cheque") {
       for (const c of p.cheques ?? []) {
         if (c.statut !== "encaisse") continue;
         settled.push({
-          date: formatDateFr(c.date_encaissement),
           sortKey: c.date_encaissement,
-          mode: PAYMENT_MODE_LABELS.cheque,
+          date: formatDateFr(c.date_encaissement),
           montant: Number(c.montant),
         });
       }
@@ -753,17 +751,15 @@ export async function getReceiptData(
       for (const e of p.prelevements ?? []) {
         if (e.statut !== "preleve") continue;
         settled.push({
-          date: formatDateFr(e.date_prelevement),
           sortKey: e.date_prelevement,
-          mode: PAYMENT_MODE_LABELS.prelevement,
+          date: formatDateFr(e.date_prelevement),
           montant: Number(e.montant),
         });
       }
     } else {
       settled.push({
-        date: formatDateFr(p.created_at),
         sortKey: p.created_at,
-        mode: PAYMENT_MODE_LABELS[p.mode as keyof typeof PAYMENT_MODE_LABELS],
+        date: formatDateFr(p.created_at),
         montant: Number(p.amount),
       });
     }
@@ -772,6 +768,7 @@ export async function getReceiptData(
     return { error: "Aucun règlement encaissé pour cette saison." };
   }
   settled.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  const lastSettled = settled[settled.length - 1];
 
   const { data: seq, error: seqError } = await supabase.rpc(
     "get_receipt_number",
@@ -796,7 +793,8 @@ export async function getReceiptData(
       },
       natureLabel: NATURE_LABELS[snapshot.nature],
       licencePrice: snapshot.licence_price,
-      payments: settled.map(({ date, mode, montant }) => ({ date, mode, montant })),
+      paid: settled.reduce((sum, r) => sum + r.montant, 0),
+      dateReglement: lastSettled.date,
     },
   };
 }
