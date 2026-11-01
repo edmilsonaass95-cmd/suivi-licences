@@ -4,9 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontalIcon, MailWarningIcon } from "lucide-react";
+import { MoreHorizontalIcon, MailWarningIcon, Trash2Icon } from "lucide-react";
 
-import { updatePrelevementStatut } from "@/app/(app)/prelevements/actions";
+import {
+  deletePrelevements,
+  updatePrelevementStatut,
+} from "@/app/(app)/prelevements/actions";
 import { sendRelances } from "@/app/(app)/joueurs/actions";
 import { parseDateOnly, formatDateFr } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +98,11 @@ export function PrelevementsTable({
   const [search, setSearch] = useState("");
   const [relancing, setRelancing] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<{
+    ids: string[];
+    label: string;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const router = useRouter();
 
   const filtered = rows.filter(
@@ -108,6 +116,28 @@ export function PrelevementsTable({
       filtered.filter((r) => selected.has(r.id)).map((r) => r.playerId)
     )
   );
+
+  const selectedIds = filtered.filter((r) => selected.has(r.id)).map((r) => r.id);
+
+  async function handleDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    const result = await deletePrelevements(pendingDelete.ids);
+    setDeleting(false);
+
+    if ("error" in result) {
+      toast.error("Impossible de supprimer", { description: result.error });
+      return;
+    }
+    toast.success(
+      result.deleted > 1
+        ? `${result.deleted} prélèvements supprimés`
+        : "Prélèvement supprimé"
+    );
+    setPendingDelete(null);
+    setSelected(new Set());
+    router.refresh();
+  }
 
   function toggleRow(id: string, checked: boolean) {
     setSelected((prev) => {
@@ -206,6 +236,44 @@ export function PrelevementsTable({
             ))}
           </SelectContent>
         </Select>
+        {canWrite && filtered.length > 0 && (
+          <div className="ml-auto flex flex-wrap gap-2">
+            {selectedIds.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setPendingDelete({
+                    ids: selectedIds,
+                    label:
+                      selectedIds.length > 1
+                        ? `ces ${selectedIds.length} prélèvements`
+                        : "ce prélèvement",
+                  })
+                }
+              >
+                <Trash2Icon />
+                Supprimer ({selectedIds.length})
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setPendingDelete({
+                  ids: filtered.map((r) => r.id),
+                  label:
+                    filtered.length > 1
+                      ? `les ${filtered.length} prélèvements affichés`
+                      : "le prélèvement affiché",
+                })
+              }
+            >
+              <Trash2Icon />
+              Tout supprimer ({filtered.length})
+            </Button>
+          </div>
+        )}
         {canWrite && selectedPlayerIds.length > 0 && (
           <AlertDialog>
             <AlertDialogTrigger
@@ -213,7 +281,6 @@ export function PrelevementsTable({
                 <Button
                   type="button"
                   variant="outline"
-                  className="ml-auto"
                   disabled={relancing}
                 />
               }
@@ -341,6 +408,17 @@ export function PrelevementsTable({
                             >
                               Remettre à venir
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() =>
+                                setPendingDelete({
+                                  ids: [row.id],
+                                  label: `le prélèvement de ${row.playerName}`,
+                                })
+                              }
+                            >
+                              Supprimer
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -353,6 +431,39 @@ export function PrelevementsTable({
         </div>
         );
       })}
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Supprimer {pendingDelete?.label} ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est définitive. Les montants correspondants ne
+              compteront plus dans les règlements du joueur, et son paiement
+              est supprimé s&apos;il n&apos;a plus aucune échéance.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+            >
+              {deleting ? "Suppression..." : "Supprimer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserRoles } from "@/lib/auth/get-role";
+import { chunk } from "@/lib/chunk";
+import { refreshPlayerPrices } from "@/lib/joueurs/seasons";
+
+const ID_BATCH_SIZE = 150;
 
 const VALID_STATUTS = ["prevu", "preleve", "echec"] as const;
 type PrelevementStatut = (typeof VALID_STATUTS)[number];
@@ -64,4 +69,86 @@ export async function updatePrelevementStatut(
   revalidatePath("/joueurs");
   if (playerId) revalidatePath(`/joueurs/${playerId}`);
   return { success: true };
+}
+
+/**
+ * Supprime des échéances de prélèvement. Le paiement qui les porte est mis à
+ * jour (montant) ou supprimé s'il n'a plus aucune échéance ; le prix de la
+ * licence est recalculé (les frais de paiement en ligne en dépendent).
+ */
+export async function deletePrelevements(prelevementIds: string[]) {
+  const { canWrite } = await getCurrentUserRoles();
+  if (!canWrite) {
+    return { error: "Action réservée aux administrateurs et gestionnaires." };
+  }
+  if (prelevementIds.length === 0) {
+    return { error: "Aucun prélèvement sélectionné." };
+  }
+
+  const supabase = await createClient();
+
+  // Paiements concernés, avant suppression.
+  const paymentIds = new Set<string>();
+  for (const batch of chunk(prelevementIds, ID_BATCH_SIZE)) {
+    const { data, error } = await supabase
+      .from("prelevements")
+      .select("payment_id")
+      .in("id", batch);
+    if (error) return { error: error.message };
+    for (const row of data ?? []) paymentIds.add(row.payment_id);
+  }
+
+  let deleted = 0;
+  for (const batch of chunk(prelevementIds, ID_BATCH_SIZE)) {
+    const { data, error } = await supabase
+      .from("prelevements")
+      .delete()
+      .in("id", batch)
+      .select("id");
+    if (error) return { error: error.message, deleted };
+    deleted += data?.length ?? 0;
+  }
+
+  // Échéances restantes par paiement : montant mis à jour, ou paiement supprimé.
+  const remainingByPayment = new Map<string, number>();
+  for (const batch of chunk([...paymentIds], ID_BATCH_SIZE)) {
+    const { data } = await supabase
+      .from("prelevements")
+      .select("payment_id, montant")
+      .in("payment_id", batch);
+    for (const row of data ?? []) {
+      remainingByPayment.set(
+        row.payment_id,
+        (remainingByPayment.get(row.payment_id) ?? 0) + Number(row.montant)
+      );
+    }
+  }
+
+  const emptyPaymentIds = [...paymentIds].filter(
+    (id) => !remainingByPayment.has(id)
+  );
+  const playerIds = new Set<string>();
+  for (const batch of chunk([...paymentIds], ID_BATCH_SIZE)) {
+    const { data } = await supabase
+      .from("payments")
+      .select("player_id")
+      .in("id", batch);
+    for (const row of data ?? []) playerIds.add(row.player_id);
+  }
+
+  for (const batch of chunk(emptyPaymentIds, ID_BATCH_SIZE)) {
+    await supabase.from("payments").delete().in("id", batch);
+  }
+  for (const [paymentId, amount] of remainingByPayment) {
+    await supabase.from("payments").update({ amount }).eq("id", paymentId);
+  }
+
+  await refreshPlayerPrices(supabase, [...playerIds]);
+
+  revalidatePath("/prelevements");
+  revalidatePath("/joueurs");
+  revalidatePath("/echeancier");
+  revalidatePath("/dashboard");
+  for (const id of playerIds) revalidatePath(`/joueurs/${id}`);
+  return { success: true, deleted };
 }
