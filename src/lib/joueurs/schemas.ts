@@ -62,6 +62,10 @@ export type PlayerFormInput = z.input<typeof playerSchema>;
 
 export const playerEditSchema = z
   .object({
+    nom: playerBaseSchema.shape.nom,
+    prenom: playerBaseSchema.shape.prenom,
+    date_naissance: playerBaseSchema.shape.date_naissance,
+    sexe: playerBaseSchema.shape.sexe,
     email: playerBaseSchema.shape.email,
     telephone: playerBaseSchema.shape.telephone,
     ville: playerBaseSchema.shape.ville,

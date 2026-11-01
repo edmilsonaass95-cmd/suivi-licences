@@ -251,7 +251,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
   const supabase = await createClient();
   const { data: player, error: fetchError } = await supabase
     .from("players")
-    .select("date_naissance, sexe")
+    .select("id")
     .eq("id", playerId)
     .single();
 
@@ -260,15 +260,15 @@ export async function updatePlayer(playerId: string, values: unknown) {
   }
 
   const categorie = getCategorieFFF(
-    parseDateOnly(player.date_naissance),
-    player.sexe as "M" | "F",
+    parseDateOnly(v.date_naissance),
+    v.sexe,
     getSaisonStart()
   );
   const horsSarcelles = isHorsSarcelles(v.ville);
   const remise = resolveRemise(v.remise_motif, v.remise);
   const licencePrice = getLicencePrice(
     categorie,
-    player.sexe as "M" | "F",
+    v.sexe,
     v.nature,
     horsSarcelles,
     remise,
@@ -278,6 +278,10 @@ export async function updatePlayer(playerId: string, values: unknown) {
   const { error } = await supabase
     .from("players")
     .update({
+      nom: v.nom.trim(),
+      prenom: v.prenom.trim(),
+      date_naissance: v.date_naissance,
+      sexe: v.sexe,
       email: v.email || null,
       telephone: v.telephone || null,
       ville: v.ville,
@@ -294,12 +298,20 @@ export async function updatePlayer(playerId: string, values: unknown) {
     })
     .eq("id", playerId);
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        error:
+          "Un autre joueur avec ce nom, prénom et cette date de naissance existe déjà.",
+      };
+    }
+    return { error: error.message };
+  }
 
   await upsertCurrentPlayerSeason(supabase, {
     id: playerId,
-    date_naissance: player.date_naissance,
-    sexe: player.sexe as "M" | "F",
+    date_naissance: v.date_naissance,
+    sexe: v.sexe,
     nature: v.nature,
     niveau: v.niveau,
     hors_sarcelles: horsSarcelles,

@@ -8,6 +8,8 @@ import { PencilIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { updatePlayer } from "@/app/(app)/joueurs/actions";
+import { getCategorieFFF, getSaisonStart } from "@/lib/categorie-fff";
+import { parseDateOnly } from "@/lib/date";
 import {
   playerEditSchema,
   type PlayerEditFormInput,
@@ -51,15 +53,15 @@ const eur = new Intl.NumberFormat("fr-FR", {
 
 export function EditPlayerDialog({
   playerId,
-  categorie,
-  sexe,
   initial,
   players,
 }: {
   playerId: string;
-  categorie: string;
-  sexe: "M" | "F";
   initial: {
+    nom: string;
+    prenom: string;
+    date_naissance: string;
+    sexe: "M" | "F";
     nature: Nature;
     niveau: Niveau;
     email: string | null;
@@ -84,6 +86,10 @@ export function EditPlayerDialog({
   } = useForm<PlayerEditFormInput>({
     resolver: zodResolver(playerEditSchema),
     defaultValues: {
+      nom: initial.nom,
+      prenom: initial.prenom,
+      date_naissance: initial.date_naissance,
+      sexe: initial.sexe,
       nature: initial.nature,
       niveau: initial.niveau,
       email: initial.email ?? "",
@@ -97,6 +103,11 @@ export function EditPlayerDialog({
   });
 
   const ville = watch("ville");
+  const dateNaissance = watch("date_naissance");
+  const sexe = (watch("sexe") ?? initial.sexe) as "M" | "F";
+  const categorie = dateNaissance
+    ? getCategorieFFF(parseDateOnly(dateNaissance), sexe, getSaisonStart())
+    : "";
   const nature = (watch("nature") ?? "renouvellement") as Nature;
   const niveau = (watch("niveau") ?? "standard") as Niveau;
   const remiseMotif = (watch("remise_motif") ?? "aucune") as RemiseMotif;
@@ -147,6 +158,52 @@ export function EditPlayerDialog({
           onSubmit={handleSubmit(onSubmit)}
           className="grid grid-cols-2 gap-3"
         >
+          <div className="space-y-1.5">
+            <Label htmlFor="nom">Nom</Label>
+            <Input id="nom" {...register("nom")} />
+            {errors.nom && (
+              <p className="text-sm text-destructive">{errors.nom.message}</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="prenom">Prénom</Label>
+            <Input id="prenom" {...register("prenom")} />
+            {errors.prenom && (
+              <p className="text-sm text-destructive">
+                {errors.prenom.message}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="date_naissance">Date de naissance</Label>
+            <Input
+              id="date_naissance"
+              type="date"
+              {...register("date_naissance")}
+            />
+            {errors.date_naissance && (
+              <p className="text-sm text-destructive">
+                {errors.date_naissance.message}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label>Sexe</Label>
+            <Select
+              value={sexe}
+              onValueChange={(v) => setValue("sexe", v as "M" | "F")}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v: string) => (v === "F" ? "Féminin" : "Masculin")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="M">Masculin</SelectItem>
+                <SelectItem value="F">Féminin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="col-span-2 space-y-1.5">
             <Label htmlFor="email">E-mail</Label>
             <Input id="email" type="email" {...register("email")} />
@@ -238,6 +295,11 @@ export function EditPlayerDialog({
           />
 
           <div className="col-span-2 rounded-lg bg-muted p-3 text-sm">
+            {categorie && (
+              <>
+                Catégorie <strong>{categorie}</strong> —{" "}
+              </>
+            )}
             Nouveau prix de la licence : <strong>{eur.format(prix)}</strong>
           </div>
 

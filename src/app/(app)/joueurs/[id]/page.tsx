@@ -162,10 +162,13 @@ export default async function PlayerDetailPage({
           {canWrite && <ExportReceiptButton playerId={player.id} />}
           {canWrite && (
             <EditPlayerDialog
+              key={`${player.nom}|${player.prenom}|${player.date_naissance}|${player.sexe}|${player.nature}|${player.niveau}|${player.ville}|${player.remise_note ?? ""}`}
               playerId={player.id}
-              categorie={categorie}
-              sexe={player.sexe as "M" | "F"}
               initial={{
+                nom: player.nom,
+                prenom: player.prenom,
+                date_naissance: player.date_naissance,
+                sexe: player.sexe as "M" | "F",
                 nature: player.nature as Nature,
                 niveau: player.niveau as Niveau,
                 email: player.email,
