@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCategorieFFF, getSaisonStart, type Sexe } from "@/lib/categorie-fff";
-import { getLicencePrice, type Nature, type Niveau } from "@/lib/joueurs/pricing";
+import {
+  getLicencePrice,
+  MODES_AVEC_FRAIS_EN_LIGNE,
+  type Nature,
+  type Niveau,
+} from "@/lib/joueurs/pricing";
 import { parseDateOnly } from "@/lib/date";
 import { chunk } from "@/lib/chunk";
 
@@ -12,6 +17,8 @@ export type PlayerAttributes = {
   niveau: Niveau;
   hors_sarcelles: boolean;
   remise: number;
+  /** Le joueur a un paiement CB / prélèvement en ligne sur la saison (+3 € de frais). */
+  frais_en_ligne?: boolean;
   /** Prix actuellement stocké sur la fiche joueur, pour le resynchroniser si une règle de prix change. */
   licence_price?: number;
 };
@@ -46,7 +53,8 @@ function computeSnapshot(
       player.nature,
       player.hors_sarcelles,
       player.remise,
-      player.niveau
+      player.niveau,
+      player.frais_en_ligne ?? false
     ),
     nature: player.nature,
     niveau: player.niveau,
@@ -64,6 +72,33 @@ function sameSnapshot(a: PlayerSeasonSnapshot, b: PlayerSeasonSnapshot) {
     a.hors_sarcelles === b.hors_sarcelles &&
     Math.abs(a.remise - b.remise) < 0.001
   );
+}
+
+/**
+ * Joueurs (parmi `playerIds`) ayant un paiement CB ou prélèvement en ligne sur
+ * la saison : leur licence est majorée des frais de paiement en ligne.
+ */
+export async function findPlayersWithFraisEnLigne(
+  supabase: SupabaseClient,
+  playerIds: string[],
+  saisonStart: number
+): Promise<Set<string>> {
+  const result = new Set<string>();
+  // Paquets de 100 : plusieurs paiements par joueur, sous la limite de 1000 lignes.
+  const batches = await Promise.all(
+    chunk(playerIds, 100).map(async (ids) => {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("player_id")
+        .eq("saison_start", saisonStart)
+        .in("mode", [...MODES_AVEC_FRAIS_EN_LIGNE])
+        .in("player_id", ids);
+      if (error) console.error("findPlayersWithFraisEnLigne:", error.message);
+      return data ?? [];
+    })
+  );
+  for (const batch of batches) for (const row of batch) result.add(row.player_id);
+  return result;
 }
 
 /**
@@ -102,6 +137,15 @@ export async function ensurePlayerSeasons(
   for (const batch of batches) existing.push(...batch);
 
   const result = new Map<string, PlayerSeasonSnapshot>();
+  const fraisEnLigneIds = await findPlayersWithFraisEnLigne(
+    supabase,
+    players.map((p) => p.id),
+    saisonStart
+  );
+  players = players.map((p) => ({
+    ...p,
+    frais_en_ligne: fraisEnLigneIds.has(p.id),
+  }));
   const existingById = new Map<string, PlayerSeasonSnapshot>();
   for (const row of existing ?? []) {
     const snapshot = {
@@ -207,7 +251,18 @@ export async function upsertCurrentPlayerSeason(
   supabase: SupabaseClient,
   player: PlayerAttributes
 ) {
-  const snapshot = computeSnapshot(player, getSaisonStart());
+  const saisonStart = getSaisonStart();
+  const snapshot = computeSnapshot(
+    {
+      ...player,
+      frais_en_ligne:
+        player.frais_en_ligne ??
+        (await findPlayersWithFraisEnLigne(supabase, [player.id], saisonStart)).has(
+          player.id
+        ),
+    },
+    saisonStart
+  );
   const { error } = await supabase
     .from("player_seasons")
     .upsert(
@@ -215,4 +270,44 @@ export async function upsertCurrentPlayerSeason(
       { onConflict: "player_id,saison_start" }
     );
   return error;
+}
+
+/**
+ * Recalcule le prix de licence de la saison réelle d'un joueur (instantané et
+ * prix de la fiche), à appeler après l'ajout, la modification ou la suppression
+ * d'un de ses paiements : les frais CB / prélèvement en ligne en dépendent.
+ */
+export async function refreshPlayerPrices(
+  supabase: SupabaseClient,
+  playerIds: string[]
+) {
+  const unique = [...new Set(playerIds)];
+  const rows = (
+    await Promise.all(
+      chunk(unique, 100).map(async (ids) => {
+        const { data } = await supabase
+          .from("players")
+          .select(
+            "id, date_naissance, sexe, nature, niveau, hors_sarcelles, remise, licence_price"
+          )
+          .in("id", ids);
+        return data ?? [];
+      })
+    )
+  ).flat();
+  await ensurePlayerSeasons(
+    supabase,
+    rows.map((p) => ({
+      id: p.id,
+      date_naissance: p.date_naissance,
+      sexe: p.sexe,
+      nature: p.nature,
+      niveau: p.niveau,
+      hors_sarcelles: p.hors_sarcelles,
+      remise: Number(p.remise),
+      licence_price: Number(p.licence_price),
+    })),
+    getSaisonStart(),
+    { canWrite: true }
+  );
 }

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { getSaisonStart } from "@/lib/categorie-fff";
 import { chunk } from "@/lib/chunk";
+import { refreshPlayerPrices } from "@/lib/joueurs/seasons";
 import {
   effectivePrelevementStatut,
   type PrelevementStatut,
@@ -289,6 +290,12 @@ export async function importPrelevements(entries: PrelevementImportEntry[]) {
 
     playersImported++;
   }
+
+  // Un prélèvement en ligne ajoute les frais de paiement en ligne à la licence.
+  await refreshPlayerPrices(
+    supabase,
+    entries.map((e) => e.playerId)
+  );
 
   revalidatePath("/prelevements");
   revalidatePath("/joueurs");

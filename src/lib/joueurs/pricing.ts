@@ -113,6 +113,11 @@ export function getSupplementHorsSarcelles(
   return SUPPLEMENT_HORS_SARCELLES;
 }
 
+// Frais ajoutés une seule fois au prix de la licence dès qu'un joueur a un
+// paiement par CB ou par prélèvement en ligne sur la saison.
+export const FRAIS_PAIEMENT_EN_LIGNE = 3;
+export const MODES_AVEC_FRAIS_EN_LIGNE = ["cb", "prelevement"] as const;
+
 export const REMISE_PARENTE = 20;
 
 export function isHorsSarcelles(ville: string): boolean {
@@ -135,13 +140,15 @@ export function getLicencePrice(
   nature: Nature,
   horsSarcelles: boolean,
   remise = 0,
-  niveau: Niveau = "standard"
+  niveau: Niveau = "standard",
+  fraisEnLigne = false
 ): number {
   const pricing = LICENCE_PRICING[categorie];
   if (!pricing) return 0;
   let price = niveau === "standard" ? pricing.base : (NIVEAU_BASE_PRICE[niveau] ?? pricing.base);
   if (NATURES_AVEC_MUTATION.includes(nature)) price += pricing.mutation;
   price += getSupplementHorsSarcelles(categorie, sexe, horsSarcelles);
+  if (fraisEnLigne) price += FRAIS_PAIEMENT_EN_LIGNE;
   price -= remise;
   return Math.max(0, Math.round(price * 100) / 100);
 }

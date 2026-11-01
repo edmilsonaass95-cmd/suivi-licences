@@ -16,6 +16,8 @@ import { ExportPlayerPdfButton } from "@/components/joueurs/export-player-pdf-bu
 import { ExportReceiptButton } from "@/components/joueurs/export-receipt-button";
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
 import {
+  FRAIS_PAIEMENT_EN_LIGNE,
+  MODES_AVEC_FRAIS_EN_LIGNE,
   NATURE_LABELS,
   NIVEAU_LABELS,
   type Nature,
@@ -73,6 +75,12 @@ export default async function PlayerDetailPage({
     : null;
 
   const licencePrice = Number(player.licence_price);
+  const saisonStart = getSaisonStart();
+  const fraisEnLigne = (payments ?? []).some(
+    (p) =>
+      p.saison_start === saisonStart &&
+      (MODES_AVEC_FRAIS_EN_LIGNE as readonly string[]).includes(p.mode)
+  );
   const paid = Number(balance?.paid ?? 0);
   const solde = Number(balance?.solde ?? licencePrice);
   const categorie = getCategorieFFF(
@@ -179,6 +187,7 @@ export default async function PlayerDetailPage({
                 remise_lien_joueur_id: player.remise_lien_joueur_id,
                 remise_note: player.remise_note,
               }}
+              fraisEnLigne={fraisEnLigne}
               players={(allPlayers ?? []).map((p) => ({
                 id: p.id,
                 nom: p.nom,
@@ -197,6 +206,11 @@ export default async function PlayerDetailPage({
             <p className="font-heading text-lg font-semibold">
               {eur.format(licencePrice)}
             </p>
+            {fraisEnLigne && (
+              <p className="text-xs text-muted-foreground">
+                dont {eur.format(FRAIS_PAIEMENT_EN_LIGNE)} de frais de paiement en ligne
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card size="sm">

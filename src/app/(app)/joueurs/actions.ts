@@ -29,7 +29,9 @@ import { sendMail } from "@/lib/email";
 import { relanceEmailHtml } from "@/lib/joueurs/relance-email";
 import {
   ensurePlayerSeasons,
+  findPlayersWithFraisEnLigne,
   getMaxKnownSaisonStart,
+  refreshPlayerPrices,
   upsertCurrentPlayerSeason,
 } from "@/lib/joueurs/seasons";
 import { getSelectedSaisonStart } from "@/lib/saison-selection-cookie";
@@ -266,13 +268,17 @@ export async function updatePlayer(playerId: string, values: unknown) {
   );
   const horsSarcelles = isHorsSarcelles(v.ville);
   const remise = resolveRemise(v.remise_motif, v.remise);
+  const fraisEnLigne = (
+    await findPlayersWithFraisEnLigne(supabase, [playerId], getSaisonStart())
+  ).has(playerId);
   const licencePrice = getLicencePrice(
     categorie,
     v.sexe,
     v.nature,
     horsSarcelles,
     remise,
-    v.niveau
+    v.niveau,
+    fraisEnLigne
   );
 
   const { error } = await supabase
@@ -316,6 +322,7 @@ export async function updatePlayer(playerId: string, values: unknown) {
     niveau: v.niveau,
     hors_sarcelles: horsSarcelles,
     remise,
+    frais_en_ligne: fraisEnLigne,
   });
 
   revalidatePath(`/joueurs/${playerId}`);
@@ -346,13 +353,17 @@ export async function updatePlayerNiveau(playerId: string, niveau: unknown) {
     player.sexe as "M" | "F",
     getSaisonStart()
   );
+  const fraisEnLigne = (
+    await findPlayersWithFraisEnLigne(supabase, [playerId], getSaisonStart())
+  ).has(playerId);
   const licencePrice = getLicencePrice(
     categorie,
     player.sexe as "M" | "F",
     player.nature,
     player.hors_sarcelles,
     Number(player.remise),
-    parsed.data
+    parsed.data,
+    fraisEnLigne
   );
 
   const { error } = await supabase
@@ -370,6 +381,7 @@ export async function updatePlayerNiveau(playerId: string, niveau: unknown) {
     niveau: parsed.data,
     hors_sarcelles: player.hors_sarcelles,
     remise: Number(player.remise),
+    frais_en_ligne: fraisEnLigne,
   });
 
   revalidatePath(`/joueurs/${playerId}`);
@@ -439,6 +451,8 @@ export async function createPayment(playerId: string, values: unknown) {
       );
     if (prelevementsError) return { error: prelevementsError.message };
   }
+
+  await refreshPlayerPrices(supabase, [playerId]);
 
   revalidatePath(`/joueurs/${playerId}`);
   revalidatePath("/joueurs");
@@ -550,6 +564,8 @@ export async function updatePayment(paymentId: string, values: unknown) {
     }
   }
 
+  await refreshPlayerPrices(supabase, [existing.player_id]);
+
   revalidatePath(`/joueurs/${existing.player_id}`);
   revalidatePath("/joueurs");
   revalidatePath("/echeancier");
@@ -576,6 +592,8 @@ export async function deletePayment(paymentId: string) {
     .eq("id", paymentId);
 
   if (error) return { error: error.message };
+
+  await refreshPlayerPrices(supabase, [payment.player_id]);
 
   revalidatePath(`/joueurs/${payment.player_id}`);
   revalidatePath("/joueurs");

@@ -55,6 +55,7 @@ export function EditPlayerDialog({
   playerId,
   initial,
   players,
+  fraisEnLigne = false,
 }: {
   playerId: string;
   initial: {
@@ -73,6 +74,8 @@ export function EditPlayerDialog({
     remise_note: string | null;
   };
   players: PlayerOption[];
+  /** Le joueur a un paiement CB / prélèvement en ligne : +3 € sur la licence. */
+  fraisEnLigne?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -122,7 +125,8 @@ export function EditPlayerDialog({
     nature,
     horsSarcelles,
     resolveRemise(remiseMotif, Number(remise)),
-    niveau
+    niveau,
+    fraisEnLigne
   );
 
   const onSubmit = async (values: PlayerEditFormInput) => {
