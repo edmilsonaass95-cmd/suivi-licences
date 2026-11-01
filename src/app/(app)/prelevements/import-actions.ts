@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { getSaisonStart } from "@/lib/categorie-fff";
 import { chunk } from "@/lib/chunk";
-import type { PrelevementStatut } from "@/lib/joueurs/statut-labels";
+import {
+  effectivePrelevementStatut,
+  type PrelevementStatut,
+} from "@/lib/joueurs/statut-labels";
 
 const ID_BATCH_SIZE = 150;
 
@@ -30,6 +33,50 @@ type ExistingRow = {
   statut: PrelevementStatut;
   reference_externe: string;
 };
+
+export type ExistingEcheance = {
+  playerId: string;
+  montant: number;
+  date: string;
+  statut: PrelevementStatut;
+};
+
+/**
+ * Retrouve, parmi les références du fichier, celles qui ont déjà été
+ * importées (par référence de la plateforme), avec le joueur auquel elles sont
+ * rattachées : sert à repérer les doublons avant l'import.
+ */
+export async function findExistingEcheances(
+  refs: string[]
+): Promise<{ existing: Record<string, ExistingEcheance> } | { error: string }> {
+  const { canWrite } = await getCurrentUserRoles();
+  if (!canWrite) {
+    return { error: "Action réservée aux administrateurs et gestionnaires." };
+  }
+
+  const supabase = await createClient();
+  const existing: Record<string, ExistingEcheance> = {};
+  for (const batch of chunk(Array.from(new Set(refs)), ID_BATCH_SIZE)) {
+    const { data, error } = await supabase
+      .from("prelevements")
+      .select(
+        "reference_externe, montant, date_prelevement, statut, payments(player_id)"
+      )
+      .in("reference_externe", batch);
+    if (error) return { error: error.message };
+    for (const row of data ?? []) {
+      const payment = Array.isArray(row.payments) ? row.payments[0] : row.payments;
+      if (!row.reference_externe || !payment) continue;
+      existing[row.reference_externe] = {
+        playerId: payment.player_id,
+        montant: Number(row.montant),
+        date: row.date_prelevement,
+        statut: row.statut as PrelevementStatut,
+      };
+    }
+  }
+  return { existing };
+}
 
 export async function importPrelevements(entries: PrelevementImportEntry[]) {
   const { canWrite } = await getCurrentUserRoles();
@@ -125,7 +172,13 @@ export async function importPrelevements(entries: PrelevementImportEntry[]) {
       changed: false,
     }));
 
-    for (const echeance of entry.echeances) {
+    for (const incoming of entry.echeances) {
+      // Évite de repasser en « prévu » une échéance déjà passée en « prélevé »
+      // par la synchronisation automatique.
+      const echeance = {
+        ...incoming,
+        statut: effectivePrelevementStatut(incoming.statut, incoming.date),
+      };
       const existing = existingByRef.get(echeance.ref);
       if (existing) {
         const row = finalRows.find((r) => r.ref === echeance.ref)!;

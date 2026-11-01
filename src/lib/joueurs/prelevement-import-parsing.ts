@@ -60,10 +60,19 @@ const STATUT_MAPPING: Record<string, PrelevementStatut | null> = {
   annulée: null,
 };
 
+/** Ligne du fichier écartée à la lecture (retrait du club, échéance annulée). */
+export type IgnoredLine = {
+  line: number; // numéro de ligne dans le fichier (en-tête = ligne 1)
+  date: string; // YYYY-MM-DD, vide si illisible
+  ref: string;
+  nomPrenom: string;
+  montant: number | null;
+};
+
 export type PrelevementParseResult = {
   echeances: ParsedEcheance[];
-  ignoredRetraits: number;
-  ignoredAnnulees: number;
+  ignoredRetraits: IgnoredLine[];
+  ignoredAnnulees: IgnoredLine[];
   errors: string[];
 };
 
@@ -85,8 +94,8 @@ export async function parsePrelevementFile(
   if (missing.length > 0) {
     return {
       echeances: [],
-      ignoredRetraits: 0,
-      ignoredAnnulees: 0,
+      ignoredRetraits: [],
+      ignoredAnnulees: [],
       errors: [
         `Colonnes introuvables dans le fichier : ${missing.join(", ")}`,
       ],
@@ -94,14 +103,22 @@ export async function parsePrelevementFile(
   }
 
   const echeances: ParsedEcheance[] = [];
-  let ignoredRetraits = 0;
-  let ignoredAnnulees = 0;
+  const ignoredRetraits: IgnoredLine[] = [];
+  const ignoredAnnulees: IgnoredLine[] = [];
   const errors: string[] = [];
+
+  const toIgnoredLine = (raw: Record<string, unknown>, i: number): IgnoredLine => ({
+    line: i + 2,
+    date: parseDateTimeFr(raw[mapping.date!]) ?? "",
+    ref: String(raw[mapping.ref!] ?? "").trim(),
+    nomPrenom: String(raw[mapping.nomPrenom!] ?? "").trim(),
+    montant: parseFlexibleMontant(raw[mapping.montant!]),
+  });
 
   for (const [i, raw] of rows.entries()) {
     const nature = String(raw[mapping.nature!] ?? "").trim();
     if (nature !== "Versement") {
-      if (nature === "Retrait") ignoredRetraits++;
+      if (nature === "Retrait") ignoredRetraits.push(toIgnoredLine(raw, i));
       continue;
     }
 
@@ -124,7 +141,7 @@ export async function parsePrelevementFile(
     }
     const statut = STATUT_MAPPING[statutKey];
     if (statut === null) {
-      ignoredAnnulees++;
+      ignoredAnnulees.push(toIgnoredLine(raw, i));
       continue;
     }
     if (!Number.isFinite(montant) || montant <= 0) {

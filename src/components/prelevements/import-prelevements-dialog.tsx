@@ -1,16 +1,19 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UploadIcon } from "lucide-react";
+import { TrashIcon, UploadIcon, Undo2Icon } from "lucide-react";
 
 import {
+  findExistingEcheances,
   importPrelevements,
+  type ExistingEcheance,
   type PrelevementImportEntry,
 } from "@/app/(app)/prelevements/import-actions";
 import {
   parsePrelevementFile,
+  type IgnoredLine,
   type ParsedEcheance,
 } from "@/lib/joueurs/prelevement-import-parsing";
 import {
@@ -18,6 +21,8 @@ import {
   type MatchablePlayer,
 } from "@/lib/joueurs/name-matching";
 import { formatDateFr } from "@/lib/date";
+import { effectivePrelevementStatut } from "@/lib/joueurs/statut-labels";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -54,7 +59,136 @@ type PreviewRow = {
   echeances: ParsedEcheance[];
   matchCount: number;
   playerId: string;
+  /** Ligne retirée de l'import par l'utilisateur (récupérable). */
+  removed: boolean;
 };
+
+/**
+ * nouveau : rien d'importé encore · maj : déjà importé en partie, avec des
+ * nouveautés ou des changements · doublon : déjà importé à l'identique ·
+ * corriger : joueur à choisir ou ligne incohérente.
+ */
+type RowKind = "nouveau" | "maj" | "doublon" | "corriger";
+
+type RowState = {
+  kind: RowKind;
+  nouvelles: number;
+  modifiees: number;
+  identiques: number;
+  reason: string | null;
+};
+
+type Filter =
+  | "tous"
+  | "pret"
+  | "corriger"
+  | "doublon"
+  | "retirees"
+  | "retraits"
+  | "annulees"
+  | "erreurs";
+
+const KIND_LABEL: Record<RowKind, string> = {
+  nouveau: "Nouveau",
+  maj: "Mise à jour",
+  doublon: "Déjà importé",
+  corriger: "À corriger",
+};
+
+const KIND_CLASS: Record<RowKind, string> = {
+  nouveau: "border-primary/50 bg-primary/10 font-medium text-primary",
+  maj: "border-sky-500 bg-sky-500/10 font-medium text-sky-700 dark:text-sky-400",
+  doublon: "border-border bg-muted font-medium text-muted-foreground",
+  corriger:
+    "border-amber-500 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-400",
+};
+
+function classifyRow(
+  row: PreviewRow,
+  existing: Record<string, ExistingEcheance>,
+  players: MatchablePlayer[]
+): RowState {
+  const base = { nouvelles: 0, modifiees: 0, identiques: 0 };
+
+  if (!row.playerId) {
+    return {
+      ...base,
+      kind: "corriger",
+      reason:
+        row.matchCount > 1
+          ? "Plusieurs joueurs correspondent : choisis le bon."
+          : "Aucun joueur trouvé : choisis-le ou retire la ligne.",
+    };
+  }
+  if (row.echeances.length > 4) {
+    return {
+      ...base,
+      kind: "corriger",
+      reason: "Plus de 4 échéances dans le fichier pour ce nom.",
+    };
+  }
+
+  const counts = { ...base };
+  for (const e of row.echeances) {
+    const found = existing[e.ref];
+    if (!found) {
+      counts.nouvelles++;
+    } else if (found.playerId !== row.playerId) {
+      const other = players.find((p) => p.id === found.playerId);
+      return {
+        ...base,
+        kind: "corriger",
+        reason: `La référence ${e.ref} est déjà importée pour ${
+          other ? `${other.nom} ${other.prenom}` : "un autre joueur"
+        }.`,
+      };
+    } else if (
+      Math.abs(found.montant - e.montant) < 0.005 &&
+      found.date === e.date &&
+      found.statut === effectivePrelevementStatut(e.statut, e.date)
+    ) {
+      counts.identiques++;
+    } else {
+      counts.modifiees++;
+    }
+  }
+
+  const kind: RowKind =
+    counts.nouvelles === 0 && counts.modifiees === 0
+      ? "doublon"
+      : counts.nouvelles === row.echeances.length
+        ? "nouveau"
+        : "maj";
+  return { ...counts, kind, reason: null };
+}
+
+function FilterChip({
+  active,
+  onClick,
+  className,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-ring",
+        active && "ring-2 ring-foreground/60 ring-offset-2 ring-offset-background",
+        !active && "opacity-90 hover:opacity-100",
+        className
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function ImportPrelevementsDialog({
   players,
@@ -66,11 +200,13 @@ export function ImportPrelevementsDialog({
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [rows, setRows] = useState<PreviewRow[]>([]);
+  const [existing, setExisting] = useState<Record<string, ExistingEcheance>>({});
   const [parseInfo, setParseInfo] = useState<{
-    ignoredRetraits: number;
-    ignoredAnnulees: number;
+    ignoredRetraits: IgnoredLine[];
+    ignoredAnnulees: IgnoredLine[];
     errors: string[];
   } | null>(null);
+  const [filter, setFilter] = useState<Filter>("tous");
   const [result, setResult] = useState<{
     playersImported: number;
     echeancesCreated: number;
@@ -80,9 +216,22 @@ export function ImportPrelevementsDialog({
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
+  const refreshExisting = useCallback(async (list: PreviewRow[]) => {
+    const refs = list.flatMap((r) => r.echeances.map((e) => e.ref));
+    const response = await findExistingEcheances(refs);
+    if ("error" in response) {
+      toast.error("Vérification des doublons impossible", {
+        description: response.error,
+      });
+      return;
+    }
+    setExisting(response.existing);
+  }, []);
+
   async function handleFile(file: File) {
     setParsing(true);
     setResult(null);
+    setFilter("tous");
     try {
       const { echeances, ignoredRetraits, ignoredAnnulees, errors } =
         await parsePrelevementFile(file);
@@ -102,6 +251,7 @@ export function ImportPrelevementsDialog({
             echeances: list,
             matchCount: candidates.length,
             playerId: candidates.length === 1 ? candidates[0].id : "",
+            removed: false,
           };
         }
       );
@@ -110,6 +260,7 @@ export function ImportPrelevementsDialog({
       setRows(preview);
       setParseInfo({ ignoredRetraits, ignoredAnnulees, errors });
       setFileName(file.name);
+      await refreshExisting(preview);
     } catch {
       toast.error("Impossible de lire ce fichier", {
         description: "Vérifie qu'il s'agit bien de l'export CSV ou Excel.",
@@ -119,15 +270,45 @@ export function ImportPrelevementsDialog({
     }
   }
 
-  function setRowPlayer(index: number, playerId: string) {
+  function setRowPlayer(nomPrenom: string, playerId: string) {
     setRows((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, playerId } : r))
+      prev.map((r) => (r.nomPrenom === nomPrenom ? { ...r, playerId } : r))
     );
   }
 
-  const importableRows = rows.filter(
-    (r) => r.playerId && r.echeances.length <= 4
+  function setRowRemoved(nomPrenom: string, removed: boolean) {
+    setRows((prev) =>
+      prev.map((r) => (r.nomPrenom === nomPrenom ? { ...r, removed } : r))
+    );
+  }
+
+  const states = useMemo(
+    () => new Map(rows.map((r) => [r.nomPrenom, classifyRow(r, existing, players)])),
+    [rows, existing, players]
   );
+
+  const activeRows = rows.filter((r) => !r.removed);
+  const kindOf = (r: PreviewRow) => states.get(r.nomPrenom)!.kind;
+  const importableRows = activeRows.filter(
+    (r) => kindOf(r) === "nouveau" || kindOf(r) === "maj"
+  );
+  const toFixCount = activeRows.filter((r) => kindOf(r) === "corriger").length;
+  const duplicateCount = activeRows.filter((r) => kindOf(r) === "doublon").length;
+  const updateCount = activeRows.filter((r) => kindOf(r) === "maj").length;
+  const removedCount = rows.length - activeRows.length;
+
+  const visibleRows = rows.filter((r) => {
+    if (filter === "retirees") return r.removed;
+    if (r.removed) return false;
+    if (filter === "pret") return kindOf(r) === "nouveau" || kindOf(r) === "maj";
+    if (filter === "corriger") return kindOf(r) === "corriger";
+    if (filter === "doublon") return kindOf(r) === "doublon";
+    return filter === "tous";
+  });
+
+  function toggleFilter(next: Filter) {
+    setFilter((current) => (current === next ? "tous" : next));
+  }
 
   async function handleImport() {
     setImporting(true);
@@ -158,6 +339,8 @@ export function ImportPrelevementsDialog({
     toast.success(
       `${summary.playersImported} joueur(s) mis à jour (${summary.echeancesCreated} échéance(s) créée(s), ${summary.echeancesUpdated} mise(s) à jour)`
     );
+    // Les lignes importées apparaissent désormais comme « Déjà importé ».
+    await refreshExisting(rows);
     router.refresh();
   }
 
@@ -165,11 +348,21 @@ export function ImportPrelevementsDialog({
     setOpen(next);
     if (!next) {
       setRows([]);
+      setExisting({});
       setParseInfo(null);
       setResult(null);
       setFileName(null);
+      setFilter("tous");
     }
   }
+
+  const showIgnored = filter === "retraits" || filter === "annulees";
+  const ignoredLines =
+    filter === "retraits"
+      ? (parseInfo?.ignoredRetraits ?? [])
+      : filter === "annulees"
+        ? (parseInfo?.ignoredAnnulees ?? [])
+        : [];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -177,15 +370,15 @@ export function ImportPrelevementsDialog({
         <UploadIcon />
         Importer les paiements en ligne
       </Button>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>Importer les paiements en ligne</DialogTitle>
           <DialogDescription>
             Dépose l&apos;export « Transactions » de la plateforme de
             paiement en ligne : chaque joueur est retrouvé automatiquement à
             partir de son nom et prénom. Un fichier déjà importé peut être
-            redéposé plus tard : les échéances déjà connues sont mises à
-            jour (statut, montant, date) plutôt que dupliquées.
+            redéposé plus tard : les échéances déjà connues sont repérées
+            (doublons) et seules celles qui ont changé sont mises à jour.
           </DialogDescription>
         </DialogHeader>
 
@@ -198,13 +391,14 @@ export function ImportPrelevementsDialog({
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) handleFile(file);
+              e.target.value = "";
             }}
           />
           <Button
             type="button"
             variant="outline"
             onClick={() => inputRef.current?.click()}
-            disabled={parsing}
+            disabled={parsing || importing}
           >
             {parsing ? "Lecture..." : "Choisir le fichier"}
           </Button>
@@ -214,94 +408,109 @@ export function ImportPrelevementsDialog({
         </div>
 
         {parseInfo && (
-          <div className="flex flex-wrap gap-2 text-sm">
-            <Badge variant="outline">{rows.length} joueur(s) identifié(s) dans le fichier</Badge>
-            <Badge>
-              {importableRows.length} prêt(s) à importer
-            </Badge>
-            {rows.length > importableRows.length && (
-              <Badge className="border-transparent bg-amber-500 text-white">
-                {rows.length - importableRows.length} à corriger manuellement
-              </Badge>
-            )}
-            {parseInfo.ignoredRetraits > 0 && (
-              <Badge variant="outline">
-                {parseInfo.ignoredRetraits} retrait(s) club ignoré(s)
-              </Badge>
-            )}
-            {parseInfo.ignoredAnnulees > 0 && (
-              <Badge variant="outline">
-                {parseInfo.ignoredAnnulees} échéance(s) annulée(s) ignorée(s)
-              </Badge>
-            )}
-            {parseInfo.errors.length > 0 && (
-              <Badge variant="destructive">
-                {parseInfo.errors.length} ligne(s) en erreur
-              </Badge>
-            )}
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap gap-2 text-sm">
+              <FilterChip active={filter === "tous"} onClick={() => setFilter("tous")}>
+                <Badge variant="outline">
+                  {activeRows.length} joueur(s) dans le fichier
+                </Badge>
+              </FilterChip>
+              <FilterChip active={filter === "pret"} onClick={() => toggleFilter("pret")}>
+                <Badge>
+                  {importableRows.length} prêt(s) à importer
+                  {updateCount > 0 && ` (dont ${updateCount} mise(s) à jour)`}
+                </Badge>
+              </FilterChip>
+              {toFixCount > 0 && (
+                <FilterChip
+                  active={filter === "corriger"}
+                  onClick={() => toggleFilter("corriger")}
+                >
+                  <Badge className="border-transparent bg-amber-500 text-white">
+                    {toFixCount} à corriger manuellement
+                  </Badge>
+                </FilterChip>
+              )}
+              {duplicateCount > 0 && (
+                <FilterChip
+                  active={filter === "doublon"}
+                  onClick={() => toggleFilter("doublon")}
+                >
+                  <Badge variant="outline">
+                    {duplicateCount} déjà importé(s)
+                  </Badge>
+                </FilterChip>
+              )}
+              {removedCount > 0 && (
+                <FilterChip
+                  active={filter === "retirees"}
+                  onClick={() => toggleFilter("retirees")}
+                >
+                  <Badge variant="outline">{removedCount} retirée(s)</Badge>
+                </FilterChip>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 text-sm">
+              {parseInfo.ignoredRetraits.length > 0 && (
+                <FilterChip
+                  active={filter === "retraits"}
+                  onClick={() => toggleFilter("retraits")}
+                >
+                  <Badge variant="outline">
+                    {parseInfo.ignoredRetraits.length} retrait(s) club ignoré(s)
+                  </Badge>
+                </FilterChip>
+              )}
+              {parseInfo.ignoredAnnulees.length > 0 && (
+                <FilterChip
+                  active={filter === "annulees"}
+                  onClick={() => toggleFilter("annulees")}
+                >
+                  <Badge variant="outline">
+                    {parseInfo.ignoredAnnulees.length} échéance(s) annulée(s)
+                    ignorée(s)
+                  </Badge>
+                </FilterChip>
+              )}
+              {parseInfo.errors.length > 0 && (
+                <FilterChip
+                  active={filter === "erreurs"}
+                  onClick={() => toggleFilter("erreurs")}
+                >
+                  <Badge variant="destructive">
+                    {parseInfo.errors.length} ligne(s) en erreur
+                  </Badge>
+                </FilterChip>
+              )}
+            </div>
           </div>
         )}
 
-        {rows.length > 0 && (
+        {showIgnored && (
           <div className="max-h-96 overflow-auto rounded-xl ring-1 ring-foreground/10">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Ligne</TableHead>
+                  <TableHead>Date</TableHead>
                   <TableHead>Nom (fichier)</TableHead>
-                  <TableHead>Joueur</TableHead>
-                  <TableHead>Échéances</TableHead>
-                  <TableHead>Total</TableHead>
+                  <TableHead>Référence</TableHead>
+                  <TableHead>Montant</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row, i) => (
-                  <TableRow key={row.nomPrenom}>
-                    <TableCell className="max-w-40 truncate" title={row.nomPrenom}>
-                      {row.nomPrenom}
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={row.playerId}
-                        onValueChange={(v) => setRowPlayer(i, v ?? "")}
-                      >
-                        <SelectTrigger className="w-full" disabled={importing}>
-                          <SelectValue
-                            placeholder={
-                              row.matchCount > 1
-                                ? "Plusieurs correspondances"
-                                : "Aucune correspondance"
-                            }
-                          >
-                            {(v: string) => {
-                              const p = players.find((pl) => pl.id === v);
-                              return p ? `${p.nom} ${p.prenom}` : "Choisir";
-                            }}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {players.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.nom} {p.prenom}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {row.echeances.length > 4 && (
-                        <p className="mt-1 text-xs text-destructive">
-                          Plus de 4 échéances dans le fichier pour ce nom.
-                        </p>
-                      )}
+                {ignoredLines.map((l) => (
+                  <TableRow key={l.line}>
+                    <TableCell className="text-muted-foreground">{l.line}</TableCell>
+                    <TableCell>{l.date ? formatDateFr(l.date) : "—"}</TableCell>
+                    <TableCell className="max-w-40 truncate" title={l.nomPrenom}>
+                      {l.nomPrenom || "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {row.echeances.length} ×{" "}
-                      {row.echeances
-                        .map((e) => formatDateFr(e.date))
-                        .join(", ")}
+                      {l.ref || "—"}
                     </TableCell>
                     <TableCell>
-                      {eur.format(
-                        row.echeances.reduce((sum, e) => sum + e.montant, 0)
-                      )}
+                      {l.montant !== null ? eur.format(l.montant) : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -310,12 +519,159 @@ export function ImportPrelevementsDialog({
           </div>
         )}
 
-        {parseInfo && parseInfo.errors.length > 0 && (
-          <ul className="max-h-32 list-disc space-y-0.5 overflow-auto pl-5 text-xs text-destructive">
+        {filter === "erreurs" && parseInfo && (
+          <ul className="max-h-96 list-disc space-y-0.5 overflow-auto pl-5 text-sm text-destructive">
             {parseInfo.errors.map((err, i) => (
               <li key={i}>{err}</li>
             ))}
           </ul>
+        )}
+
+        {!showIgnored && filter !== "erreurs" && rows.length > 0 && (
+          <div className="max-h-96 overflow-auto rounded-xl ring-1 ring-foreground/10">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nom (fichier)</TableHead>
+                  <TableHead>Joueur</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Échéances</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleRows.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center text-muted-foreground"
+                    >
+                      Aucune ligne dans cette catégorie.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {visibleRows.map((row) => {
+                  const state = states.get(row.nomPrenom)!;
+                  return (
+                    <TableRow
+                      key={row.nomPrenom}
+                      className={row.removed ? "opacity-60" : undefined}
+                    >
+                      <TableCell
+                        className="max-w-40 truncate"
+                        title={row.nomPrenom}
+                      >
+                        {row.nomPrenom}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={row.playerId}
+                          onValueChange={(v) =>
+                            setRowPlayer(row.nomPrenom, v ?? "")
+                          }
+                        >
+                          <SelectTrigger
+                            className="w-full"
+                            disabled={importing || row.removed}
+                          >
+                            <SelectValue
+                              placeholder={
+                                row.matchCount > 1
+                                  ? "Plusieurs correspondances"
+                                  : "Aucune correspondance"
+                              }
+                            >
+                              {(v: string) => {
+                                const p = players.find((pl) => pl.id === v);
+                                return p ? `${p.nom} ${p.prenom}` : "Choisir";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {players.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.nom} {p.prenom}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {!row.removed && state.reason && (
+                          <p className="mt-1 text-xs text-destructive">
+                            {state.reason}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {row.removed ? (
+                          <Badge variant="outline">Retirée</Badge>
+                        ) : (
+                          <>
+                            <span
+                              className={cn(
+                                "inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs",
+                                KIND_CLASS[state.kind]
+                              )}
+                            >
+                              {KIND_LABEL[state.kind]}
+                            </span>
+                            {state.kind === "maj" && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {[
+                                  state.nouvelles > 0 &&
+                                    `${state.nouvelles} nouvelle(s)`,
+                                  state.modifiees > 0 &&
+                                    `${state.modifiees} modifiée(s)`,
+                                  state.identiques > 0 &&
+                                    `${state.identiques} identique(s)`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-44 whitespace-normal text-sm text-muted-foreground">
+                        {row.echeances.length} ×{" "}
+                        {row.echeances
+                          .map((e) => formatDateFr(e.date))
+                          .join(", ")}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {eur.format(
+                          row.echeances.reduce((sum, e) => sum + e.montant, 0)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={importing}
+                          aria-label={
+                            row.removed
+                              ? `Remettre ${row.nomPrenom} dans l'import`
+                              : `Retirer ${row.nomPrenom} de l'import`
+                          }
+                          title={
+                            row.removed
+                              ? "Remettre dans l'import"
+                              : "Retirer de l'import"
+                          }
+                          onClick={() =>
+                            setRowRemoved(row.nomPrenom, !row.removed)
+                          }
+                        >
+                          {row.removed ? <Undo2Icon /> : <TrashIcon />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
 
         {result && (
