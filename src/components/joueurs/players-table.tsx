@@ -10,6 +10,7 @@ import {
   sendRelances,
   updatePlayerNiveau,
 } from "@/app/(app)/joueurs/actions";
+import { PAYMENT_MODE_LABELS } from "@/lib/joueurs/schemas";
 import {
   NATURE_LABELS,
   NATURES,
@@ -65,6 +66,7 @@ type Filters = {
   statut: string;
   niveau: string;
   nature: string;
+  paiement: string;
 };
 
 const DEFAULT_FILTERS: Filters = {
@@ -74,6 +76,7 @@ const DEFAULT_FILTERS: Filters = {
   statut: "tous",
   niveau: "tous",
   nature: "toutes",
+  paiement: "tous",
 };
 
 const filterListeners = new Set<() => void>();
@@ -145,6 +148,8 @@ export type PlayerRow = {
   paid: number;
   solde: number;
   previousSolde?: number;
+  /** Modes de paiement enregistrés pour la saison. */
+  modes: string[];
 };
 
 const eur = new Intl.NumberFormat("fr-FR", {
@@ -180,7 +185,7 @@ export function PlayersTable({
 }) {
   const router = useRouter();
   const { filters, setFilter } = usePersistedFilters();
-  const { search, categorie, genre, statut, niveau, nature } = filters;
+  const { search, categorie, genre, statut, niveau, nature, paiement } = filters;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState<string | null>(null);
@@ -201,6 +206,9 @@ export function PlayersTable({
     const matchesGenre = genre === "tous" || r.sexe === genre;
     const matchesNiveau = niveau === "tous" || r.niveau === niveau;
     const matchesNature = nature === "toutes" || r.nature === nature;
+    const matchesPaiement =
+      paiement === "tous" ||
+      (paiement === "aucun" ? r.modes.length === 0 : r.modes.includes(paiement));
     const isSolde = r.licencePrice > 0 && r.paid >= r.licencePrice;
     const matchesStatut =
       statut === "tous" ||
@@ -214,6 +222,7 @@ export function PlayersTable({
       matchesGenre &&
       matchesNiveau &&
       matchesNature &&
+      matchesPaiement &&
       matchesStatut
     );
   });
@@ -426,6 +435,28 @@ export function PlayersTable({
             {NATURES.map((n) => (
               <SelectItem key={n} value={n}>
                 {NATURE_LABELS[n]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={paiement} onValueChange={(v) => setFilter("paiement", v ?? "tous")}>
+          <SelectTrigger>
+            <SelectValue>
+              {(v: string) =>
+                v === "tous"
+                  ? "Tous types de paiement"
+                  : v === "aucun"
+                    ? "Aucun paiement"
+                    : PAYMENT_MODE_LABELS[v as keyof typeof PAYMENT_MODE_LABELS]
+              }
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tous">Tous types de paiement</SelectItem>
+            <SelectItem value="aucun">Aucun paiement</SelectItem>
+            {Object.entries(PAYMENT_MODE_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
               </SelectItem>
             ))}
           </SelectContent>

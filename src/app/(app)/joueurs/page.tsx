@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserRoles } from "@/lib/auth/get-role";
-import { ensurePlayerSeasons, getMaxKnownSaisonStart } from "@/lib/joueurs/seasons";
+import {
+  ensurePlayerSeasons,
+  getMaxKnownSaisonStart,
+} from "@/lib/joueurs/seasons";
 import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 import {
   FIRST_SAISON_START,
@@ -10,7 +13,10 @@ import {
 import { getSelectedSaisonStart } from "@/lib/saison-selection-cookie";
 import { AddPlayerDialog } from "@/components/joueurs/add-player-dialog";
 import { BulkAttachmentsDialog } from "@/components/joueurs/bulk-attachments-dialog";
-import { PlayersTable, type PlayerRow } from "@/components/joueurs/players-table";
+import {
+  PlayersTable,
+  type PlayerRow,
+} from "@/components/joueurs/players-table";
 import { ExportPaymentsDialog } from "@/components/joueurs/export-payments-dialog";
 
 export default async function JoueursPage() {
@@ -20,22 +26,41 @@ export default async function JoueursPage() {
   const selectedSaison = await getSelectedSaisonStart(maxSaisonStart);
   const previousSaison =
     selectedSaison > FIRST_SAISON_START ? selectedSaison - 1 : null;
-  const [{ data: players }, { data: existingAttachments }] = await Promise.all([
+  const [
+    { data: players },
+    { data: existingAttachments },
+    { data: seasonPayments },
+  ] = await Promise.all([
     fetchAllRows((from, to) =>
-      supabase.from("players").select("*").order("nom").range(from, to)
+      supabase.from("players").select("*").order("nom").range(from, to),
     ),
     canWrite
       ? fetchAllRows((from, to) =>
           supabase
             .from("attachments")
             .select("player_id, filename")
-            .range(from, to)
+            .range(from, to),
         )
       : Promise.resolve({
           data: [] as { player_id: string; filename: string }[],
           error: null,
         }),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("payments")
+        .select("id, player_id, mode")
+        .eq("saison_start", selectedSaison)
+        .order("id")
+        .range(from, to),
+    ),
   ]);
+
+  const modesByPlayer = new Map<string, Set<string>>();
+  for (const pay of seasonPayments ?? []) {
+    const modes = modesByPlayer.get(pay.player_id) ?? new Set<string>();
+    modes.add(pay.mode);
+    modesByPlayer.set(pay.player_id, modes);
+  }
 
   const existingFilenamesByPlayer: Record<string, string[]> = {};
   for (const a of existingAttachments ?? []) {
@@ -76,7 +101,7 @@ export default async function JoueursPage() {
     (paidTotals ?? []).map((r: { player_id: string; paid: number }) => [
       r.player_id,
       Number(r.paid),
-    ])
+    ]),
   );
 
   let previousSoldeByPlayer: Map<string, number> | null = null;
@@ -85,8 +110,11 @@ export default async function JoueursPage() {
       previousData;
     const previousPaidByPlayer = new Map<string, number>(
       (previousPaidTotals ?? []).map(
-        (r: { player_id: string; paid: number }) => [r.player_id, Number(r.paid)]
-      )
+        (r: { player_id: string; paid: number }) => [
+          r.player_id,
+          Number(r.paid),
+        ],
+      ),
     );
     previousSoldeByPlayer = new Map(
       playerAttributes.map((p) => {
@@ -94,7 +122,7 @@ export default async function JoueursPage() {
         const licencePrice = snapshot?.licence_price ?? 0;
         const paid = previousPaidByPlayer.get(p.id) ?? 0;
         return [p.id, licencePrice - paid];
-      })
+      }),
     );
   }
 
@@ -115,6 +143,7 @@ export default async function JoueursPage() {
       paid,
       solde,
       previousSolde: previousSoldeByPlayer?.get(p.id),
+      modes: [...(modesByPlayer.get(p.id) ?? [])],
     };
   });
 
