@@ -17,7 +17,6 @@ import { ExportReceiptButton } from "@/components/joueurs/export-receipt-button"
 import { REMISE_MOTIF_LABELS } from "@/lib/joueurs/schemas";
 import {
   FRAIS_PAIEMENT_EN_LIGNE,
-  MODES_AVEC_FRAIS_EN_LIGNE,
   NATURE_LABELS,
   NIVEAU_LABELS,
   type Nature,
@@ -79,7 +78,11 @@ export default async function PlayerDetailPage({
   const fraisEnLigne = (payments ?? []).some(
     (p) =>
       p.saison_start === saisonStart &&
-      (MODES_AVEC_FRAIS_EN_LIGNE as readonly string[]).includes(p.mode)
+      (p.mode === "cb" ||
+        (p.mode === "prelevement" &&
+          (p.prelevements ?? []).some(
+            (e: { statut: string }) => e.statut !== "annule"
+          )))
   );
   const paid = Number(balance?.paid ?? 0);
   const solde = Number(balance?.solde ?? licencePrice);

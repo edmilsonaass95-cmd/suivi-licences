@@ -114,9 +114,8 @@ export function getSupplementHorsSarcelles(
 }
 
 // Frais ajoutés une seule fois au prix de la licence dès qu'un joueur a un
-// paiement par CB ou par prélèvement en ligne sur la saison.
+// paiement par CB ou par prélèvement en ligne (non annulé) sur la saison.
 export const FRAIS_PAIEMENT_EN_LIGNE = 3;
-export const MODES_AVEC_FRAIS_EN_LIGNE = ["cb", "prelevement"] as const;
 
 export const REMISE_PARENTE = 20;
 

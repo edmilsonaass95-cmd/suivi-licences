@@ -7,6 +7,7 @@ export type ParsedEcheance = {
   montant: number;
   date: string; // YYYY-MM-DD
   statut: PrelevementStatut;
+  line: number; // numéro de ligne dans le fichier (en-tête = ligne 1)
 };
 
 const HEADER_ALIASES = {
@@ -53,14 +54,14 @@ function parseDateTimeFr(value: unknown): string | null {
   return `${match[3]}-${match[2]}-${match[1]}`;
 }
 
-const STATUT_MAPPING: Record<string, PrelevementStatut | null> = {
+const STATUT_MAPPING: Record<string, PrelevementStatut> = {
   planifiée: "prevu",
   "en succès": "preleve",
   "en échec": "echec",
-  annulée: null,
+  annulée: "annule",
 };
 
-/** Ligne du fichier écartée à la lecture (retrait du club, échéance annulée). */
+/** Ligne du fichier écartée à la lecture (retrait du club). */
 export type IgnoredLine = {
   line: number; // numéro de ligne dans le fichier (en-tête = ligne 1)
   date: string; // YYYY-MM-DD, vide si illisible
@@ -72,15 +73,14 @@ export type IgnoredLine = {
 export type PrelevementParseResult = {
   echeances: ParsedEcheance[];
   ignoredRetraits: IgnoredLine[];
-  ignoredAnnulees: IgnoredLine[];
   errors: string[];
 };
 
 /**
  * Lit l'export "Transactions" de la plateforme de paiement en ligne. Ne
  * garde que les lignes "Versement" (les "Retrait" sont des mouvements de
- * fonds du club vers sa banque, sans joueur associé) et exclut les
- * échéances "Annulée" (jamais prélevées, rien à suivre).
+ * fonds du club vers sa banque, sans joueur associé). Le statut de chaque
+ * échéance est repris : planifiée, en succès, en échec ou annulée.
  */
 export async function parsePrelevementFile(
   file: File
@@ -95,7 +95,6 @@ export async function parsePrelevementFile(
     return {
       echeances: [],
       ignoredRetraits: [],
-      ignoredAnnulees: [],
       errors: [
         `Colonnes introuvables dans le fichier : ${missing.join(", ")}`,
       ],
@@ -104,7 +103,6 @@ export async function parsePrelevementFile(
 
   const echeances: ParsedEcheance[] = [];
   const ignoredRetraits: IgnoredLine[] = [];
-  const ignoredAnnulees: IgnoredLine[] = [];
   const errors: string[] = [];
 
   const toIgnoredLine = (raw: Record<string, unknown>, i: number): IgnoredLine => ({
@@ -140,10 +138,6 @@ export async function parsePrelevementFile(
       continue;
     }
     const statut = STATUT_MAPPING[statutKey];
-    if (statut === null) {
-      ignoredAnnulees.push(toIgnoredLine(raw, i));
-      continue;
-    }
     if (!Number.isFinite(montant) || montant <= 0) {
       errors.push(`Ligne ${i + 2} (${nomPrenom}) : montant invalide, ignorée.`);
       continue;
@@ -153,8 +147,8 @@ export async function parsePrelevementFile(
       continue;
     }
 
-    echeances.push({ ref, nomPrenom, montant, date, statut });
+    echeances.push({ ref, nomPrenom, montant, date, statut, line: i + 2 });
   }
 
-  return { echeances, ignoredRetraits, ignoredAnnulees, errors };
+  return { echeances, ignoredRetraits, errors };
 }

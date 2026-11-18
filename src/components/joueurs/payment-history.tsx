@@ -239,7 +239,11 @@ export function PaymentHistory({
                     <TableCell>
                       <Badge
                         variant={
-                          e.statut === "preleve" ? "default" : "outline"
+                          e.statut === "preleve"
+                            ? "default"
+                            : e.statut === "echec"
+                              ? "destructive"
+                              : "outline"
                         }
                       >
                         {PRELEVEMENT_STATUT_LABEL[e.statut]}
@@ -275,6 +279,14 @@ export function PaymentHistory({
                               }
                             >
                               Remettre à venir
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={e.statut === "annule"}
+                              onClick={() =>
+                                handlePrelevementStatut(e.id, "annule")
+                              }
+                            >
+                              Marquer annulé
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

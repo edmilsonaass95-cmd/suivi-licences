@@ -54,7 +54,7 @@ export type PrelevementRow = {
   numeroEcheance: number;
   montant: number;
   datePrelevement: string;
-  statut: "prevu" | "preleve" | "echec";
+  statut: "prevu" | "preleve" | "echec" | "annule";
   playerId: string;
   playerName: string;
 };
@@ -64,17 +64,19 @@ const eur = new Intl.NumberFormat("fr-FR", {
   currency: "EUR",
 });
 
-const FILTERS = ["tous", "prevu", "preleve", "echec"] as const;
+const FILTERS = ["tous", "prevu", "preleve", "echec", "annule"] as const;
 const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
   tous: "Tous",
   prevu: "À venir",
   preleve: "Prélevés",
   echec: "Échecs",
+  annule: "Annulés",
 };
 
 function StatutBadge({ statut }: { statut: PrelevementRow["statut"] }) {
   if (statut === "preleve") return <Badge>Prélevé</Badge>;
   if (statut === "echec") return <Badge variant="destructive">Échec</Badge>;
+  if (statut === "annule") return <Badge variant="secondary">Annulé</Badge>;
   return <Badge variant="outline">À venir</Badge>;
 }
 
@@ -407,6 +409,14 @@ export function PrelevementsTable({
                               }
                             >
                               Remettre à venir
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={row.statut === "annule"}
+                              onClick={() =>
+                                handleStatutChange(row.id, "annule")
+                              }
+                            >
+                              Marquer annulé
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               variant="destructive"

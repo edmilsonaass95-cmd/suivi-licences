@@ -15,8 +15,11 @@ export async function syncOverdueCheques(supabase: SupabaseClient) {
 }
 
 /**
- * Une fois la date de prélèvement dépassée, un prélèvement "prévu" est
- * considéré prélevé par défaut (à repasser en échec manuellement sinon).
+ * Une fois la date de prélèvement dépassée, un prélèvement "prévu" saisi à la
+ * main est considéré prélevé par défaut (à repasser en échec manuellement
+ * sinon). Les échéances importées (référence de la plateforme) ne sont jamais
+ * modifiées ici : leur statut vient du fichier, et seul « en succès » compte
+ * comme encaissé.
  */
 export async function syncOverduePrelevements(supabase: SupabaseClient) {
   const today = new Date().toISOString().slice(0, 10);
@@ -24,5 +27,6 @@ export async function syncOverduePrelevements(supabase: SupabaseClient) {
     .from("prelevements")
     .update({ statut: "preleve" })
     .eq("statut", "prevu")
+    .is("reference_externe", null)
     .lt("date_prelevement", today);
 }

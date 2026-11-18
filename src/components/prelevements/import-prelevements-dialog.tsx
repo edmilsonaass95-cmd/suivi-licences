@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { TrashIcon, UploadIcon, Undo2Icon } from "lucide-react";
+import { TrashIcon, UploadIcon, Undo2Icon, UserPlusIcon } from "lucide-react";
 
 import {
   findExistingEcheances,
@@ -21,7 +21,11 @@ import {
   type MatchablePlayer,
 } from "@/lib/joueurs/name-matching";
 import { formatDateFr } from "@/lib/date";
-import { effectivePrelevementStatut } from "@/lib/joueurs/statut-labels";
+import type { PrelevementStatut } from "@/lib/joueurs/statut-labels";
+import {
+  CreatePlayerDialog,
+  type CreatedPlayer,
+} from "@/components/prelevements/create-player-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -103,12 +107,40 @@ const KIND_CLASS: Record<RowKind, string> = {
     "border-amber-500 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-400",
 };
 
+/** Libellés de la plateforme de paiement en ligne, par statut d'échéance. */
+const ECHEANCE_STATUT_LABEL: Record<PrelevementStatut, string> = {
+  prevu: "Planifiée",
+  preleve: "En succès",
+  echec: "En échec",
+  annule: "Annulée",
+};
+
+const ECHEANCE_STATUT_CLASS: Record<PrelevementStatut, string> = {
+  prevu: "border-border bg-muted text-muted-foreground",
+  preleve: "border-primary/50 bg-primary/10 text-primary",
+  echec: "border-destructive/50 bg-destructive/10 text-destructive",
+  annule: "border-border bg-transparent text-muted-foreground line-through",
+};
+
+/**
+ * Échéances à importer : une échéance annulée jamais importée n'a rien à
+ * suivre (elle est ignorée), mais une échéance déjà connue qui passe en
+ * « annulée » doit être mise à jour.
+ */
+function relevantEcheances(
+  row: PreviewRow,
+  existing: Record<string, ExistingEcheance>
+): ParsedEcheance[] {
+  return row.echeances.filter((e) => e.statut !== "annule" || existing[e.ref]);
+}
+
 function classifyRow(
   row: PreviewRow,
   existing: Record<string, ExistingEcheance>,
   players: MatchablePlayer[]
 ): RowState {
   const base = { nouvelles: 0, modifiees: 0, identiques: 0 };
+  const echeances = relevantEcheances(row, existing);
 
   if (!row.playerId) {
     return {
@@ -117,10 +149,10 @@ function classifyRow(
       reason:
         row.matchCount > 1
           ? "Plusieurs joueurs correspondent : choisis le bon."
-          : "Aucun joueur trouvé : choisis-le ou retire la ligne.",
+          : "Aucun joueur trouvé : choisis-le, crée-le ou retire la ligne.",
     };
   }
-  if (row.echeances.length > 4) {
+  if (echeances.filter((e) => e.statut !== "annule").length > 4) {
     return {
       ...base,
       kind: "corriger",
@@ -129,7 +161,7 @@ function classifyRow(
   }
 
   const counts = { ...base };
-  for (const e of row.echeances) {
+  for (const e of echeances) {
     const found = existing[e.ref];
     if (!found) {
       counts.nouvelles++;
@@ -145,7 +177,7 @@ function classifyRow(
     } else if (
       Math.abs(found.montant - e.montant) < 0.005 &&
       found.date === e.date &&
-      found.statut === effectivePrelevementStatut(e.statut, e.date)
+      found.statut === e.statut
     ) {
       counts.identiques++;
     } else {
@@ -156,7 +188,7 @@ function classifyRow(
   const kind: RowKind =
     counts.nouvelles === 0 && counts.modifiees === 0
       ? "doublon"
-      : counts.nouvelles === row.echeances.length
+      : counts.nouvelles === echeances.length
         ? "nouveau"
         : "maj";
   return { ...counts, kind, reason: null };
@@ -191,10 +223,18 @@ function FilterChip({
 }
 
 export function ImportPrelevementsDialog({
-  players,
+  players: serverPlayers,
 }: {
   players: MatchablePlayer[];
 }) {
+  // Joueurs créés pendant l'import : disponibles tout de suite, avant que la
+  // liste du serveur ne soit rechargée.
+  const [createdPlayers, setCreatedPlayers] = useState<CreatedPlayer[]>([]);
+  const players = useMemo(() => {
+    const known = new Set(serverPlayers.map((p) => p.id));
+    return [...serverPlayers, ...createdPlayers.filter((p) => !known.has(p.id))];
+  }, [serverPlayers, createdPlayers]);
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -203,7 +243,6 @@ export function ImportPrelevementsDialog({
   const [existing, setExisting] = useState<Record<string, ExistingEcheance>>({});
   const [parseInfo, setParseInfo] = useState<{
     ignoredRetraits: IgnoredLine[];
-    ignoredAnnulees: IgnoredLine[];
     errors: string[];
   } | null>(null);
   const [filter, setFilter] = useState<Filter>("tous");
@@ -233,7 +272,7 @@ export function ImportPrelevementsDialog({
     setResult(null);
     setFilter("tous");
     try {
-      const { echeances, ignoredRetraits, ignoredAnnulees, errors } =
+      const { echeances, ignoredRetraits, errors } =
         await parsePrelevementFile(file);
 
       const grouped = new Map<string, ParsedEcheance[]>();
@@ -258,7 +297,7 @@ export function ImportPrelevementsDialog({
       preview.sort((a, b) => a.nomPrenom.localeCompare(b.nomPrenom));
 
       setRows(preview);
-      setParseInfo({ ignoredRetraits, ignoredAnnulees, errors });
+      setParseInfo({ ignoredRetraits, errors });
       setFileName(file.name);
       await refreshExisting(preview);
     } catch {
@@ -287,7 +326,23 @@ export function ImportPrelevementsDialog({
     [rows, existing, players]
   );
 
-  const activeRows = rows.filter((r) => !r.removed);
+  // Lignes dont toutes les échéances sont annulées et jamais importées : rien à faire.
+  const meaningfulRows = rows.filter(
+    (r) => relevantEcheances(r, existing).length > 0
+  );
+  const ignoredAnnulees: IgnoredLine[] = rows.flatMap((r) =>
+    r.echeances
+      .filter((e) => e.statut === "annule" && !existing[e.ref])
+      .map((e) => ({
+        line: e.line,
+        date: e.date,
+        ref: e.ref,
+        nomPrenom: r.nomPrenom,
+        montant: e.montant,
+      }))
+  );
+
+  const activeRows = meaningfulRows.filter((r) => !r.removed);
   const kindOf = (r: PreviewRow) => states.get(r.nomPrenom)!.kind;
   const importableRows = activeRows.filter(
     (r) => kindOf(r) === "nouveau" || kindOf(r) === "maj"
@@ -295,9 +350,9 @@ export function ImportPrelevementsDialog({
   const toFixCount = activeRows.filter((r) => kindOf(r) === "corriger").length;
   const duplicateCount = activeRows.filter((r) => kindOf(r) === "doublon").length;
   const updateCount = activeRows.filter((r) => kindOf(r) === "maj").length;
-  const removedCount = rows.length - activeRows.length;
+  const removedCount = meaningfulRows.filter((r) => r.removed).length;
 
-  const visibleRows = rows.filter((r) => {
+  const visibleRows = meaningfulRows.filter((r) => {
     if (filter === "retirees") return r.removed;
     if (r.removed) return false;
     if (filter === "pret") return kindOf(r) === "nouveau" || kindOf(r) === "maj";
@@ -318,7 +373,7 @@ export function ImportPrelevementsDialog({
         playerId: r.playerId,
         nom: player.nom,
         prenom: player.prenom,
-        echeances: r.echeances.map((e) => ({
+        echeances: relevantEcheances(r, existing).map((e) => ({
           ref: e.ref,
           montant: e.montant,
           date: e.date,
@@ -353,6 +408,7 @@ export function ImportPrelevementsDialog({
       setResult(null);
       setFileName(null);
       setFilter("tous");
+      setCreatingFor(null);
     }
   }
 
@@ -361,7 +417,7 @@ export function ImportPrelevementsDialog({
     filter === "retraits"
       ? (parseInfo?.ignoredRetraits ?? [])
       : filter === "annulees"
-        ? (parseInfo?.ignoredAnnulees ?? [])
+        ? ignoredAnnulees
         : [];
 
   return (
@@ -378,7 +434,9 @@ export function ImportPrelevementsDialog({
             paiement en ligne : chaque joueur est retrouvé automatiquement à
             partir de son nom et prénom. Un fichier déjà importé peut être
             redéposé plus tard : les échéances déjà connues sont repérées
-            (doublons) et seules celles qui ont changé sont mises à jour.
+            (doublons) et seules celles qui ont changé sont mises à jour, y compris leur
+            statut (planifiée, en succès, en échec, annulée). Seules les
+            échéances « en succès » comptent comme encaissées.
           </DialogDescription>
         </DialogHeader>
 
@@ -461,14 +519,14 @@ export function ImportPrelevementsDialog({
                   </Badge>
                 </FilterChip>
               )}
-              {parseInfo.ignoredAnnulees.length > 0 && (
+              {ignoredAnnulees.length > 0 && (
                 <FilterChip
                   active={filter === "annulees"}
                   onClick={() => toggleFilter("annulees")}
                 >
                   <Badge variant="outline">
-                    {parseInfo.ignoredAnnulees.length} échéance(s) annulée(s)
-                    ignorée(s)
+                    {ignoredAnnulees.length} échéance(s) annulée(s) non
+                    importée(s)
                   </Badge>
                 </FilterChip>
               )}
@@ -527,7 +585,7 @@ export function ImportPrelevementsDialog({
           </ul>
         )}
 
-        {!showIgnored && filter !== "erreurs" && rows.length > 0 && (
+        {!showIgnored && filter !== "erreurs" && meaningfulRows.length > 0 && (
           <div className="max-h-96 overflow-auto rounded-xl ring-1 ring-foreground/10">
             <Table>
               <TableHeader>
@@ -601,6 +659,21 @@ export function ImportPrelevementsDialog({
                             {state.reason}
                           </p>
                         )}
+                        {!row.removed &&
+                          !row.playerId &&
+                          row.matchCount === 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-1.5"
+                              disabled={importing}
+                              onClick={() => setCreatingFor(row.nomPrenom)}
+                            >
+                              <UserPlusIcon />
+                              Créer le joueur
+                            </Button>
+                          )}
                       </TableCell>
                       <TableCell>
                         {row.removed ? (
@@ -632,15 +705,28 @@ export function ImportPrelevementsDialog({
                           </>
                         )}
                       </TableCell>
-                      <TableCell className="min-w-44 whitespace-normal text-sm text-muted-foreground">
-                        {row.echeances.length} ×{" "}
-                        {row.echeances
-                          .map((e) => formatDateFr(e.date))
-                          .join(", ")}
+                      <TableCell className="min-w-52 whitespace-normal">
+                        <div className="flex flex-wrap gap-1">
+                          {relevantEcheances(row, existing).map((e) => (
+                            <span
+                              key={e.ref}
+                              title={`Réf. ${e.ref} — ${eur.format(e.montant)}`}
+                              className={cn(
+                                "inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs",
+                                ECHEANCE_STATUT_CLASS[e.statut]
+                              )}
+                            >
+                              {formatDateFr(e.date)} ·{" "}
+                              {ECHEANCE_STATUT_LABEL[e.statut]}
+                            </span>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {eur.format(
-                          row.echeances.reduce((sum, e) => sum + e.montant, 0)
+                          relevantEcheances(row, existing)
+                            .filter((e) => e.statut !== "annule")
+                            .reduce((sum, e) => sum + e.montant, 0)
                         )}
                       </TableCell>
                       <TableCell>
@@ -704,6 +790,21 @@ export function ImportPrelevementsDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {creatingFor !== null && (
+        <CreatePlayerDialog
+          key={creatingFor}
+          nomPrenom={creatingFor}
+          open
+          onOpenChange={(next) => {
+            if (!next) setCreatingFor(null);
+          }}
+          onCreated={(player) => {
+            setCreatedPlayers((prev) => [...prev, player]);
+            setRowPlayer(creatingFor, player.id);
+            router.refresh();
+          }}
+        />
+      )}
     </Dialog>
   );
 }

@@ -6,10 +6,7 @@ import { getCurrentUserRoles } from "@/lib/auth/get-role";
 import { getSaisonStart } from "@/lib/categorie-fff";
 import { chunk } from "@/lib/chunk";
 import { refreshPlayerPrices } from "@/lib/joueurs/seasons";
-import {
-  effectivePrelevementStatut,
-  type PrelevementStatut,
-} from "@/lib/joueurs/statut-labels";
+import type { PrelevementStatut } from "@/lib/joueurs/statut-labels";
 
 const ID_BATCH_SIZE = 150;
 
@@ -142,7 +139,14 @@ export async function importPrelevements(entries: PrelevementImportEntry[]) {
   let echeancesUpdated = 0;
   const errors: string[] = [];
 
+  const knownRefs = new Set(existingRows.map((r) => r.reference_externe));
+
   for (const entry of entries) {
+    // Une échéance annulée qui n'a jamais été importée n'a rien à suivre : on
+    // ne la crée pas (elle ne compterait que dans la limite de 4 échéances).
+    entry.echeances = entry.echeances.filter(
+      (e) => e.statut !== "annule" || knownRefs.has(e.ref)
+    );
     if (entry.echeances.length === 0) continue;
 
     let paymentId = paymentIdByPlayer.get(entry.playerId) ?? null;
@@ -174,12 +178,9 @@ export async function importPrelevements(entries: PrelevementImportEntry[]) {
     }));
 
     for (const incoming of entry.echeances) {
-      // Évite de repasser en « prévu » une échéance déjà passée en « prélevé »
-      // par la synchronisation automatique.
-      const echeance = {
-        ...incoming,
-        statut: effectivePrelevementStatut(incoming.statut, incoming.date),
-      };
+      // Le statut du fichier est repris tel quel : seule une échéance « en
+      // succès » (prélevé) compte comme encaissée.
+      const echeance = incoming;
       const existing = existingByRef.get(echeance.ref);
       if (existing) {
         const row = finalRows.find((r) => r.ref === echeance.ref)!;
@@ -205,9 +206,10 @@ export async function importPrelevements(entries: PrelevementImportEntry[]) {
       }
     }
 
-    if (finalRows.length > 4) {
+    const activeCount = finalRows.filter((r) => r.statut !== "annule").length;
+    if (activeCount > 4) {
       errors.push(
-        `${entry.nom} ${entry.prenom} : plus de 4 échéances au total (${finalRows.length}), ignoré — à traiter manuellement.`
+        `${entry.nom} ${entry.prenom} : plus de 4 échéances au total (${activeCount}), ignoré — à traiter manuellement.`
       );
       continue;
     }
@@ -278,7 +280,10 @@ export async function importPrelevements(entries: PrelevementImportEntry[]) {
     }
     if (rowFailed) continue;
 
-    const totalAmount = finalRows.reduce((sum, r) => sum + r.montant, 0);
+    // Une échéance annulée ne sera jamais prélevée : elle n'entre pas dans le total.
+    const totalAmount = finalRows
+      .filter((r) => r.statut !== "annule")
+      .reduce((sum, r) => sum + r.montant, 0);
     const { error: amountError } = await supabase
       .from("payments")
       .update({ amount: totalAmount })

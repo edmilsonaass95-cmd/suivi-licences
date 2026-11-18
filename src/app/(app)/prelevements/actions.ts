@@ -8,7 +8,7 @@ import { refreshPlayerPrices } from "@/lib/joueurs/seasons";
 
 const ID_BATCH_SIZE = 150;
 
-const VALID_STATUTS = ["prevu", "preleve", "echec"] as const;
+const VALID_STATUTS = ["prevu", "preleve", "echec", "annule"] as const;
 type PrelevementStatut = (typeof VALID_STATUTS)[number];
 
 export async function updatePrelevementStatut(
@@ -64,6 +64,9 @@ export async function updatePrelevementStatut(
         .in("id", followingIds);
     }
   }
+
+  // Une échéance annulée ou rétablie change les frais de paiement en ligne.
+  if (playerId) await refreshPlayerPrices(supabase, [playerId]);
 
   revalidatePath("/prelevements");
   revalidatePath("/joueurs");

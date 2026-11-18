@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCategorieFFF, getSaisonStart, type Sexe } from "@/lib/categorie-fff";
 import {
   getLicencePrice,
-  MODES_AVEC_FRAIS_EN_LIGNE,
   type Nature,
   type Niveau,
 } from "@/lib/joueurs/pricing";
@@ -87,14 +86,33 @@ export async function findPlayersWithFraisEnLigne(
   // Paquets de 100 : plusieurs paiements par joueur, sous la limite de 1000 lignes.
   const batches = await Promise.all(
     chunk(playerIds, 100).map(async (ids) => {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("player_id")
-        .eq("saison_start", saisonStart)
-        .in("mode", [...MODES_AVEC_FRAIS_EN_LIGNE])
-        .in("player_id", ids);
-      if (error) console.error("findPlayersWithFraisEnLigne:", error.message);
-      return data ?? [];
+      const [simple, echeances] = await Promise.all([
+        supabase
+          .from("payments")
+          .select("player_id")
+          .eq("saison_start", saisonStart)
+          .eq("mode", "cb")
+          .in("player_id", ids),
+        // Un prélèvement dont toutes les échéances sont annulées n'a pas lieu.
+        supabase
+          .from("prelevements")
+          .select("payments!inner(player_id)")
+          .in("statut", ["prevu", "preleve", "echec"])
+          .eq("payments.saison_start", saisonStart)
+          .in("payments.player_id", ids),
+      ]);
+      if (simple.error)
+        console.error("findPlayersWithFraisEnLigne:", simple.error.message);
+      if (echeances.error)
+        console.error("findPlayersWithFraisEnLigne:", echeances.error.message);
+      const fromEcheances = (echeances.data ?? []).flatMap((row) => {
+        const rel = row.payments as unknown as
+          | { player_id: string }
+          | { player_id: string }[]
+          | null;
+        return Array.isArray(rel) ? rel : rel ? [rel] : [];
+      });
+      return [...(simple.data ?? []), ...fromEcheances];
     })
   );
   for (const batch of batches) for (const row of batch) result.add(row.player_id);
