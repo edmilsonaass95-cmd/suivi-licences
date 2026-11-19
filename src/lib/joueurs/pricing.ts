@@ -81,8 +81,8 @@ export const NIVEAU_LABELS: Record<Niveau, string> = {
 // supplément mutation (par catégorie), le supplément hors Sarcelles et la
 // remise continuent de s'appliquer par-dessus.
 const NIVEAU_BASE_PRICE: Partial<Record<Niveau, number>> = {
-  u17_nat: 480,
-  u19_nat: 480,
+  u17_nat: 500,
+  u19_nat: 500,
   u19_nat_f: 450,
   d3f: 450,
   senior_1: 500,
