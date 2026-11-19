@@ -1,3 +1,4 @@
+import { fetchSaisonPaidTotals } from "@/lib/joueurs/paid-totals";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateFr } from "@/lib/date";
@@ -82,7 +83,7 @@ export default async function DashboardPage() {
       .order("date_prelevement"),
   ]);
 
-  const [snapshotByPlayer, { data: paidTotals }] = await Promise.all([
+  const [snapshotByPlayer, paidByPlayer] = await Promise.all([
     ensurePlayerSeasons(
       supabase,
       (players ?? []).map((p) => ({
@@ -98,15 +99,8 @@ export default async function DashboardPage() {
       selectedSaison,
       { canWrite }
     ),
-    supabase.rpc("saison_paid_totals", { _saison_start: selectedSaison }),
+    fetchSaisonPaidTotals(supabase, selectedSaison),
   ]);
-
-  const paidByPlayer = new Map<string, number>(
-    (paidTotals ?? []).map((r: { player_id: string; paid: number }) => [
-      r.player_id,
-      Number(r.paid),
-    ])
-  );
 
   const rows = (players ?? []).map((p) => {
     const snapshot = snapshotByPlayer.get(p.id);

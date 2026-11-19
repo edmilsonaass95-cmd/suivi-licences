@@ -5,6 +5,7 @@ import {
   getMaxKnownSaisonStart,
 } from "@/lib/joueurs/seasons";
 import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
+import { fetchSaisonPaidTotals } from "@/lib/joueurs/paid-totals";
 import {
   FIRST_SAISON_START,
   saisonLabel,
@@ -79,43 +80,25 @@ export default async function JoueursPage() {
     licence_price: Number(p.licence_price),
   }));
 
-  const [snapshotByPlayer, { data: paidTotals }, previousData] =
+  const [snapshotByPlayer, paidByPlayer, previousData] =
     await Promise.all([
       ensurePlayerSeasons(supabase, playerAttributes, selectedSaison, {
         canWrite,
       }),
-      supabase.rpc("saison_paid_totals", { _saison_start: selectedSaison }),
+      fetchSaisonPaidTotals(supabase, selectedSaison),
       previousSaison !== null
         ? Promise.all([
             ensurePlayerSeasons(supabase, playerAttributes, previousSaison, {
               canWrite,
             }),
-            supabase.rpc("saison_paid_totals", {
-              _saison_start: previousSaison,
-            }),
+            fetchSaisonPaidTotals(supabase, previousSaison),
           ])
         : Promise.resolve(null),
     ]);
 
-  const paidByPlayer = new Map<string, number>(
-    (paidTotals ?? []).map((r: { player_id: string; paid: number }) => [
-      r.player_id,
-      Number(r.paid),
-    ]),
-  );
-
   let previousSoldeByPlayer: Map<string, number> | null = null;
   if (previousData) {
-    const [previousSnapshotByPlayer, { data: previousPaidTotals }] =
-      previousData;
-    const previousPaidByPlayer = new Map<string, number>(
-      (previousPaidTotals ?? []).map(
-        (r: { player_id: string; paid: number }) => [
-          r.player_id,
-          Number(r.paid),
-        ],
-      ),
-    );
+    const [previousSnapshotByPlayer, previousPaidByPlayer] = previousData;
     previousSoldeByPlayer = new Map(
       playerAttributes.map((p) => {
         const snapshot = previousSnapshotByPlayer.get(p.id);
