@@ -123,15 +123,18 @@ const ECHEANCE_STATUT_CLASS: Record<PrelevementStatut, string> = {
 };
 
 /**
- * Échéances à importer : une échéance annulée jamais importée n'a rien à
- * suivre (elle est ignorée), mais une échéance déjà connue qui passe en
- * « annulée » doit être mise à jour.
+ * Échéances à importer : toutes, avec leur statut (y compris « annulée »). Seul
+ * un joueur dont toutes les échéances sont annulées et jamais importées n'a rien
+ * à suivre : la ligne est ignorée.
  */
 function relevantEcheances(
   row: PreviewRow,
   existing: Record<string, ExistingEcheance>
 ): ParsedEcheance[] {
-  return row.echeances.filter((e) => e.statut !== "annule" || existing[e.ref]);
+  const hasSomethingToTrack = row.echeances.some(
+    (e) => e.statut !== "annule" || existing[e.ref]
+  );
+  return hasSomethingToTrack ? row.echeances : [];
 }
 
 function classifyRow(
@@ -330,17 +333,17 @@ export function ImportPrelevementsDialog({
   const meaningfulRows = rows.filter(
     (r) => relevantEcheances(r, existing).length > 0
   );
-  const ignoredAnnulees: IgnoredLine[] = rows.flatMap((r) =>
-    r.echeances
-      .filter((e) => e.statut === "annule" && !existing[e.ref])
-      .map((e) => ({
+  const ignoredAnnulees: IgnoredLine[] = rows
+    .filter((r) => relevantEcheances(r, existing).length === 0)
+    .flatMap((r) =>
+      r.echeances.map((e) => ({
         line: e.line,
         date: e.date,
         ref: e.ref,
         nomPrenom: r.nomPrenom,
         montant: e.montant,
       }))
-  );
+    );
 
   const activeRows = meaningfulRows.filter((r) => !r.removed);
   const kindOf = (r: PreviewRow) => states.get(r.nomPrenom)!.kind;
@@ -525,8 +528,8 @@ export function ImportPrelevementsDialog({
                   onClick={() => toggleFilter("annulees")}
                 >
                   <Badge variant="outline">
-                    {ignoredAnnulees.length} échéance(s) annulée(s) non
-                    importée(s)
+                    {ignoredAnnulees.length} échéance(s) annulée(s) sans autre
+                    échéance (ignorée(s))
                   </Badge>
                 </FilterChip>
               )}

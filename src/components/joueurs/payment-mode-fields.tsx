@@ -117,7 +117,7 @@ export function EcheancesFields({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <Label>Échéances ({rows.length}/4)</Label>
+        <Label>Échéances ({rows.length > 4 ? rows.length : `${rows.length}/4`})</Label>
         <div className="flex gap-1">
           <Button
             type="button"

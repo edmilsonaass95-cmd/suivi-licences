@@ -116,7 +116,9 @@ export const paymentSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("prelevement"),
     note: z.string().optional(),
-    echeances: z.array(echeanceItemSchema).min(1).max(4),
+    // 4 échéances au plus à la saisie ; l'import des paiements en ligne peut
+    // en porter davantage (échéances annulées et remplacées).
+    echeances: z.array(echeanceItemSchema).min(1).max(12),
   }),
 ]);
 

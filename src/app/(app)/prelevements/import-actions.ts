@@ -142,12 +142,13 @@ export async function importPrelevements(entries: PrelevementImportEntry[]) {
   const knownRefs = new Set(existingRows.map((r) => r.reference_externe));
 
   for (const entry of entries) {
-    // Une échéance annulée qui n'a jamais été importée n'a rien à suivre : on
-    // ne la crée pas (elle ne compterait que dans la limite de 4 échéances).
-    entry.echeances = entry.echeances.filter(
-      (e) => e.statut !== "annule" || knownRefs.has(e.ref)
-    );
-    if (entry.echeances.length === 0) continue;
+    // Un joueur dont toutes les échéances sont annulées et jamais importées
+    // n'a rien à suivre : on ne crée pas de paiement vide.
+    if (
+      !entry.echeances.some((e) => e.statut !== "annule" || knownRefs.has(e.ref))
+    ) {
+      continue;
+    }
 
     let paymentId = paymentIdByPlayer.get(entry.playerId) ?? null;
     const existingForPayment = paymentId
