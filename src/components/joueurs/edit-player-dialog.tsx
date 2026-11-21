@@ -270,7 +270,7 @@ export function EditPlayerDialog({
               </p>
             )}
             {ville &&
-              getSupplementHorsSarcelles(categorie, sexe, horsSarcelles) > 0 && (
+              getSupplementHorsSarcelles(categorie, sexe, horsSarcelles, niveau) > 0 && (
               <p className="text-sm text-muted-foreground">
                 Hors Sarcelles : +20€ appliqués automatiquement.
               </p>

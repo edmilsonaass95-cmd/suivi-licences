@@ -102,13 +102,17 @@ const CATEGORIES_SANS_SUPPLEMENT_HORS_SARCELLES = new Set([
   "Vétéran F",
 ]);
 
-/** Supplément hors Sarcelles : 0 pour les licenciées et pour U19 à Vétéran. */
+/**
+ * Supplément hors Sarcelles : 0 pour les licenciées, pour U19 à Vétéran et
+ * pour le niveau U17NAT.
+ */
 export function getSupplementHorsSarcelles(
   categorie: string,
   sexe: "M" | "F",
-  horsSarcelles: boolean
+  horsSarcelles: boolean,
+  niveau: Niveau = "standard"
 ): number {
-  if (!horsSarcelles || sexe === "F") return 0;
+  if (!horsSarcelles || sexe === "F" || niveau === "u17_nat") return 0;
   if (CATEGORIES_SANS_SUPPLEMENT_HORS_SARCELLES.has(categorie)) return 0;
   return SUPPLEMENT_HORS_SARCELLES;
 }
@@ -146,7 +150,7 @@ export function getLicencePrice(
   if (!pricing) return 0;
   let price = niveau === "standard" ? pricing.base : (NIVEAU_BASE_PRICE[niveau] ?? pricing.base);
   if (NATURES_AVEC_MUTATION.includes(nature)) price += pricing.mutation;
-  price += getSupplementHorsSarcelles(categorie, sexe, horsSarcelles);
+  price += getSupplementHorsSarcelles(categorie, sexe, horsSarcelles, niveau);
   if (fraisEnLigne) price += FRAIS_PAIEMENT_EN_LIGNE;
   price -= remise;
   return Math.max(0, Math.round(price * 100) / 100);

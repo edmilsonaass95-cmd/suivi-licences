@@ -211,7 +211,7 @@ export function AddPlayerDialog({ players }: { players: PlayerOption[] }) {
             )}
             {ville &&
               preview &&
-              getSupplementHorsSarcelles(preview.categorie, sexe, horsSarcelles) > 0 && (
+              getSupplementHorsSarcelles(preview.categorie, sexe, horsSarcelles, niveau) > 0 && (
               <p className="text-sm text-muted-foreground">
                 Hors Sarcelles : +20€ appliqués automatiquement.
               </p>
