@@ -4,7 +4,12 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { DownloadIcon, Trash2Icon, MailWarningIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  DownloadIcon,
+  Trash2Icon,
+  MailWarningIcon,
+} from "lucide-react";
 import {
   deletePlayers,
   sendRelances,
@@ -30,6 +35,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -61,7 +73,8 @@ const FILTERS_STORAGE_KEY = "joueurs-filtres";
 
 type Filters = {
   search: string;
-  categorie: string;
+  /** Catégories retenues ; vide = toutes. */
+  categorie: string[];
   genre: string;
   statut: string;
   niveau: string;
@@ -71,7 +84,7 @@ type Filters = {
 
 const DEFAULT_FILTERS: Filters = {
   search: "",
-  categorie: "toutes",
+  categorie: [],
   genre: "tous",
   statut: "tous",
   niveau: "tous",
@@ -120,12 +133,20 @@ function usePersistedFilters() {
   );
   const filters = useMemo<Filters>(() => {
     try {
-      return { ...DEFAULT_FILTERS, ...(raw ? JSON.parse(raw) : {}) };
+      const parsed = { ...DEFAULT_FILTERS, ...(raw ? JSON.parse(raw) : {}) };
+      // Ancien format : une seule catégorie sous forme de texte.
+      if (!Array.isArray(parsed.categorie)) {
+        parsed.categorie =
+          typeof parsed.categorie === "string" && parsed.categorie !== "toutes"
+            ? [parsed.categorie]
+            : [];
+      }
+      return parsed as Filters;
     } catch {
       return DEFAULT_FILTERS;
     }
   }, [raw]);
-  const setFilter = (key: keyof Filters, value: string) =>
+  const setFilter = (key: keyof Filters, value: string | string[]) =>
     writeFilters({ ...filters, [key]: value });
   return { filters, setFilter };
 }
@@ -202,7 +223,7 @@ export function PlayersTable({
       .toLowerCase()
       .includes(search.toLowerCase());
     const matchesCategorie =
-      categorie === "toutes" || r.categorie === categorie;
+      categorie.length === 0 || categorie.includes(r.categorie);
     const matchesGenre = genre === "tous" || r.sexe === genre;
     const matchesNiveau = niveau === "tous" || r.niveau === niveau;
     const matchesNature = nature === "toutes" || r.nature === nature;
@@ -373,24 +394,41 @@ export function PlayersTable({
           onChange={(e) => setFilter("search", e.target.value)}
           className="max-w-xs"
         />
-        <Select
-          value={categorie}
-          onValueChange={(v) => setFilter("categorie", v ?? "toutes")}
-        >
-          <SelectTrigger>
-            <SelectValue>
-              {(v: string) => (v === "toutes" ? "Toutes catégories" : v)}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="toutes">Toutes catégories</SelectItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex h-8 w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50">
+            {categorie.length === 0
+              ? "Toutes catégories"
+              : categorie.length === 1
+                ? categorie[0]
+                : `${categorie.length} catégories`}
+            <ChevronDownIcon className="size-4 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="max-h-80 min-w-48">
+            <DropdownMenuCheckboxItem
+              checked={categorie.length === 0}
+              onCheckedChange={() => setFilter("categorie", [])}
+            >
+              Toutes catégories
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
             {categories.map((c) => (
-              <SelectItem key={c} value={c}>
+              <DropdownMenuCheckboxItem
+                key={c}
+                checked={categorie.includes(c)}
+                onCheckedChange={(checked) =>
+                  setFilter(
+                    "categorie",
+                    checked
+                      ? [...categorie, c]
+                      : categorie.filter((x) => x !== c)
+                  )
+                }
+              >
                 {c}
-              </SelectItem>
+              </DropdownMenuCheckboxItem>
             ))}
-          </SelectContent>
-        </Select>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Select value={genre} onValueChange={(v) => setFilter("genre", v ?? "tous")}>
           <SelectTrigger>
             <SelectValue>
@@ -503,7 +541,8 @@ export function PlayersTable({
                 <AlertDialogDescription>
                   Un e-mail rappelant leur solde à régler sera envoyé à
                   l&apos;adresse enregistrée de chaque joueur sélectionné.
-                  Les joueurs déjà soldés ou sans e-mail seront ignorés.
+                  Les joueurs déjà soldés, sans e-mail ou qui ont encore une
+                  échéance de prélèvement planifiée seront ignorés.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

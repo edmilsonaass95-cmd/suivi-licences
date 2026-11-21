@@ -300,8 +300,9 @@ export function PrelevementsTable({
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   Un e-mail rappelant leur solde à régler sera envoyé à
-                  chaque joueur sélectionné. Les joueurs déjà soldés ou
-                  sans e-mail seront ignorés.
+                  chaque joueur sélectionné. Les joueurs déjà soldés, sans
+                  e-mail ou qui ont encore une échéance planifiée seront
+                  ignorés.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

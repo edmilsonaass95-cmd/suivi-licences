@@ -109,22 +109,42 @@ export async function sendRelances(playerIds: string[]) {
     licence_price: number;
   }[] = [];
   const balances: { player_id: string; solde: number }[] = [];
+  // Joueurs qui ont encore une échéance de prélèvement planifiée : le solde
+  // va se régler tout seul, inutile de les relancer.
+  const withPlannedEcheance = new Set<string>();
 
   for (const batch of chunk(playerIds, ID_BATCH_SIZE)) {
     const [
       { data: playerBatch, error: playersError },
       { data: balanceBatch, error: balancesError },
+      { data: plannedBatch, error: plannedError },
     ] = await Promise.all([
       supabase
         .from("players")
         .select("id, nom, prenom, email, licence_price")
         .in("id", batch),
       supabase.from("player_balances").select("*").in("player_id", batch),
+      supabase
+        .from("prelevements")
+        .select("payments!inner(player_id)")
+        .eq("statut", "prevu")
+        .eq("payments.saison_start", getSaisonStart())
+        .in("payments.player_id", batch),
     ]);
     if (playersError) return { error: playersError.message };
     if (balancesError) return { error: balancesError.message };
+    if (plannedError) return { error: plannedError.message };
     if (playerBatch) players.push(...playerBatch);
     if (balanceBatch) balances.push(...balanceBatch);
+    for (const row of plannedBatch ?? []) {
+      const rel = row.payments as unknown as
+        | { player_id: string }
+        | { player_id: string }[]
+        | null;
+      for (const pay of Array.isArray(rel) ? rel : rel ? [rel] : []) {
+        withPlannedEcheance.add(pay.player_id);
+      }
+    }
   }
 
   const balanceByPlayer = new Map(
@@ -138,12 +158,20 @@ export async function sendRelances(playerIds: string[]) {
     const balance = balanceByPlayer.get(p.id);
     const solde = Number(balance?.solde ?? p.licence_price);
 
-    if (!p.email) {
-      failed.push({ nom: p.nom, prenom: p.prenom, reason: "Pas d'e-mail" });
-      continue;
-    }
     if (solde <= 0) {
       failed.push({ nom: p.nom, prenom: p.prenom, reason: "Déjà soldé" });
+      continue;
+    }
+    if (withPlannedEcheance.has(p.id)) {
+      failed.push({
+        nom: p.nom,
+        prenom: p.prenom,
+        reason: "Prélèvement planifié",
+      });
+      continue;
+    }
+    if (!p.email) {
+      failed.push({ nom: p.nom, prenom: p.prenom, reason: "Pas d'e-mail" });
       continue;
     }
 
