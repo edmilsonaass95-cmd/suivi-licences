@@ -107,6 +107,8 @@ export async function sendRelances(playerIds: string[]) {
     prenom: string;
     email: string | null;
     licence_price: number;
+    date_naissance: string;
+    sexe: "M" | "F";
   }[] = [];
   const balances: { player_id: string; solde: number }[] = [];
   // Joueurs qui ont encore une échéance de prélèvement planifiée : le solde
@@ -121,7 +123,7 @@ export async function sendRelances(playerIds: string[]) {
     ] = await Promise.all([
       supabase
         .from("players")
-        .select("id, nom, prenom, email, licence_price")
+        .select("id, nom, prenom, email, licence_price, date_naissance, sexe")
         .in("id", batch),
       supabase.from("player_balances").select("*").in("player_id", batch),
       supabase
@@ -179,7 +181,16 @@ export async function sendRelances(playerIds: string[]) {
       await sendMail({
         to: p.email,
         subject: "Rappel : solde de licence à régler",
-        html: relanceEmailHtml(p.prenom, solde),
+        html: relanceEmailHtml({
+          nom: p.nom,
+          prenom: p.prenom,
+          categorie: getCategorieFFF(
+            parseDateOnly(p.date_naissance),
+            p.sexe,
+            getSaisonStart()
+          ),
+          solde,
+        }),
       });
       sent++;
     } catch (e) {
