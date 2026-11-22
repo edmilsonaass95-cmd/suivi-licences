@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/dialog";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 Mo
+// Nombre de fichiers envoyés en même temps : bien plus rapide qu'un par un.
+const UPLOAD_CONCURRENCY = 4;
 
 type RowStatus = "idle" | "uploading" | "done" | "error";
 
@@ -69,6 +71,14 @@ export function BulkAttachmentsDialog({
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
+    null
+  );
+  const [summary, setSummary] = useState<{
+    sent: number;
+    skipped: number;
+    failed: number;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -114,48 +124,79 @@ export function BulkAttachmentsDialog({
   }
 
   async function handleImport() {
-    setImporting(true);
     const supabase = createClient();
+    // Les fichiers déjà envoyés ne sont pas renvoyés ; ceux en erreur sont
+    // retentés.
+    const queue = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.playerId && row.status !== "done");
+    const skipped = rows.filter((r) => !r.playerId).length;
+    if (queue.length === 0) return;
+
+    setImporting(true);
+    setSummary(null);
+    setProgress({ done: 0, total: queue.length });
+
+    let cursor = 0;
+    let finished = 0;
     let sent = 0;
-    let skipped = 0;
     let failed = 0;
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row.playerId) {
-        skipped++;
-        continue;
-      }
+    async function uploadOne({ row, index }: (typeof queue)[number]) {
       if (row.file.size > MAX_SIZE_BYTES) {
-        updateRow(i, { status: "error", error: "Fichier trop volumineux (10 Mo max)" });
+        updateRow(index, {
+          status: "error",
+          error: "Fichier trop volumineux (10 Mo max)",
+        });
         failed++;
-        continue;
+        return;
       }
 
-      updateRow(i, { status: "uploading" });
-      const path = `${row.playerId}/${Date.now()}-${row.file.name}`;
+      updateRow(index, { status: "uploading", error: undefined });
+      const path = `${row.playerId}/${Date.now()}-${index}-${row.file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("attachments")
         .upload(path, row.file);
-
       if (uploadError) {
-        updateRow(i, { status: "error", error: uploadError.message });
+        updateRow(index, { status: "error", error: uploadError.message });
         failed++;
-        continue;
+        return;
       }
 
       const result = await createAttachment(row.playerId, path, row.file.name);
       if ("error" in result) {
-        updateRow(i, { status: "error", error: result.error });
+        updateRow(index, { status: "error", error: result.error });
         failed++;
-        continue;
+        return;
       }
 
-      updateRow(i, { status: "done" });
+      updateRow(index, { status: "done" });
       sent++;
     }
 
+    async function worker() {
+      while (cursor < queue.length) {
+        const item = queue[cursor++];
+        try {
+          await uploadOne(item);
+        } catch (e) {
+          updateRow(item.index, {
+            status: "error",
+            error: e instanceof Error ? e.message : "Erreur d'envoi",
+          });
+          failed++;
+        }
+        finished++;
+        setProgress({ done: finished, total: queue.length });
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, worker)
+    );
+
     setImporting(false);
+    setSummary({ sent, skipped, failed });
     router.refresh();
 
     const parts = [`${sent} fichier${sent > 1 ? "s" : ""} importé${sent > 1 ? "s" : ""}`];
@@ -173,10 +214,18 @@ export function BulkAttachmentsDialog({
     if (!next) {
       setRows([]);
       setImporting(false);
+      setProgress(null);
+      setSummary(null);
     }
   }
 
-  const importableCount = rows.filter((r) => r.playerId).length;
+  const importableCount = rows.filter(
+    (r) => r.playerId && r.status !== "done"
+  ).length;
+  const percent =
+    progress && progress.total > 0
+      ? Math.round((progress.done / progress.total) * 100)
+      : 0;
 
   const duplicateFlags = useMemo(() => {
     const seenInBatch = new Map<string, number>();
@@ -193,7 +242,14 @@ export function BulkAttachmentsDialog({
   }, [rows, existingFilenamesByPlayer]);
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Fermer en plein envoi ferait perdre le suivi des fichiers restants.
+        if (!next && importing) return;
+        handleClose(next);
+      }}
+    >
       <Button type="button" variant="outline" onClick={() => setOpen(true)}>
         <FileUpIcon />
         Importer des pièces jointes
@@ -239,6 +295,58 @@ export function BulkAttachmentsDialog({
             choisis des fichiers
           </button>
         </div>
+
+        {(importing || summary) && progress && (
+          <div className="space-y-2 rounded-xl border bg-card p-3">
+            <div className="flex items-center justify-between gap-3 text-sm font-medium">
+              <span className="flex items-center gap-2">
+                {importing ? (
+                  <>
+                    <Loader2Icon className="size-4 animate-spin" />
+                    Import en cours... ne ferme pas cette fenêtre
+                  </>
+                ) : summary && summary.failed > 0 ? (
+                  <>
+                    <TriangleAlertIcon className="size-4 text-destructive" />
+                    Import terminé avec des erreurs
+                  </>
+                ) : (
+                  <>
+                    <CheckIcon className="size-4 text-primary" />
+                    Import terminé
+                  </>
+                )}
+              </span>
+              <span>{percent} %</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={percent}
+              className="h-3 w-full overflow-hidden rounded-full bg-muted"
+            >
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  summary && summary.failed > 0 ? "bg-destructive" : "bg-primary"
+                }`}
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {progress.done} / {progress.total} fichier(s) traité(s)
+              {summary && (
+                <>
+                  {" "}
+                  — {summary.sent} ajouté(s)
+                  {summary.skipped > 0 &&
+                    `, ${summary.skipped} ignoré(s) (aucun joueur choisi)`}
+                  {summary.failed > 0 && `, ${summary.failed} en erreur`}
+                </>
+              )}
+            </p>
+          </div>
+        )}
 
         {rows.length > 0 && (
           <div className="max-h-80 overflow-y-auto rounded-lg ring-1 ring-foreground/10">
@@ -288,7 +396,7 @@ export function BulkAttachmentsDialog({
                           {row.error}
                         </p>
                       )}
-                      {row.status !== "error" && duplicateFlags[i] && (
+                      {row.status === "idle" && duplicateFlags[i] && (
                         <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                           <TriangleAlertIcon className="size-3 shrink-0" />
                           Doublon : un fichier du même nom existe déjà pour
@@ -332,7 +440,9 @@ export function BulkAttachmentsDialog({
             disabled={importableCount === 0 || importing}
             onClick={handleImport}
           >
-            {importing ? "Import..." : `Importer (${importableCount})`}
+            {importing
+              ? `Import... ${progress?.done ?? 0} / ${progress?.total ?? 0}`
+              : `Importer (${importableCount})`}
           </Button>
         </DialogFooter>
       </DialogContent>
