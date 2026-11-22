@@ -142,5 +142,5 @@ export const DEFAULT_AMOUNT_BY_MODE: Partial<
 > = {
   labaz: 100,
   pass_aglo: 60,
-  pass_sport: 70,
+  pass_sport: 50,
 };
