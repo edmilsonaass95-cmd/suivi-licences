@@ -3,7 +3,13 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UploadIcon, DownloadIcon, Trash2Icon, PaperclipIcon } from "lucide-react";
+import {
+  UploadIcon,
+  DownloadIcon,
+  EyeIcon,
+  Trash2Icon,
+  PaperclipIcon,
+} from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -13,6 +19,13 @@ import {
 import { formatDateFr } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +39,25 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 Mo
+
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+/** Type d'aperçu possible d'après l'extension : PDF, image ou aucun. */
+function previewKind(filename: string): {
+  kind: "pdf" | "image" | null;
+  mime: string;
+} {
+  const extension = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (extension === "pdf") return { kind: "pdf", mime: "application/pdf" };
+  const image = IMAGE_MIME_BY_EXTENSION[extension];
+  return image ? { kind: "image", mime: image } : { kind: null, mime: "" };
+}
 
 export type Attachment = {
   id: string;
@@ -45,6 +77,12 @@ export function AttachmentsSection({
 }) {
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    attachment: Attachment;
+    url: string | null;
+    kind: "pdf" | "image" | null;
+  } | null>(null);
   const [pendingDuplicate, setPendingDuplicate] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -136,6 +174,38 @@ export function AttachmentsSection({
     URL.revokeObjectURL(url);
   }
 
+  async function handlePreview(attachment: Attachment) {
+    const { kind, mime } = previewKind(attachment.filename);
+    if (!kind) {
+      setPreview({ attachment, url: null, kind: null });
+      return;
+    }
+
+    setPreviewLoadingId(attachment.id);
+    const supabase = createClient();
+    const { data, error } = await supabase.storage
+      .from("attachments")
+      .download(attachment.file_path);
+    setPreviewLoadingId(null);
+
+    if (error || !data) {
+      toast.error("Impossible d'afficher le fichier", {
+        description: error?.message,
+      });
+      return;
+    }
+
+    // Le type est forcé d'après l'extension pour que le navigateur affiche le
+    // fichier au lieu de le proposer en téléchargement.
+    const url = URL.createObjectURL(new Blob([data], { type: mime }));
+    setPreview({ attachment, url, kind });
+  }
+
+  function closePreview() {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  }
+
   async function handleDelete(attachmentId: string) {
     const result = await deleteAttachment(attachmentId);
     if (result.error) {
@@ -215,7 +285,15 @@ export function AttachmentsSection({
             >
               <div className="flex min-w-0 items-center gap-2">
                 <PaperclipIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">{a.filename}</span>
+                <button
+                  type="button"
+                  className="truncate text-left hover:underline disabled:opacity-60"
+                  disabled={previewLoadingId === a.id}
+                  onClick={() => handlePreview(a)}
+                  title="Ouvrir l'aperçu"
+                >
+                  {a.filename}
+                </button>
                 {duplicateAttachmentIds.has(a.id) && (
                   <Badge
                     variant="outline"
@@ -233,9 +311,21 @@ export function AttachmentsSection({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
+                  disabled={previewLoadingId === a.id}
+                  onClick={() => handlePreview(a)}
+                  aria-label="Aperçu"
+                  title="Aperçu"
+                >
+                  <EyeIcon className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   disabled={downloadingId === a.id}
                   onClick={() => handleDownload(a)}
                   aria-label="Télécharger"
+                  title="Télécharger"
                 >
                   <DownloadIcon className="size-4" />
                 </Button>
@@ -278,6 +368,57 @@ export function AttachmentsSection({
           ))}
         </ul>
       )}
+
+      <Dialog
+        open={preview !== null}
+        onOpenChange={(next) => {
+          if (!next) closePreview();
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-8">
+              {preview?.attachment.filename}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Aperçu du fichier joint
+            </DialogDescription>
+          </DialogHeader>
+          {preview?.kind === "pdf" && preview.url && (
+            <iframe
+              src={preview.url}
+              title={preview.attachment.filename}
+              className="h-[70dvh] w-full rounded-lg border"
+            />
+          )}
+          {preview?.kind === "image" && preview.url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview.url}
+              alt={preview.attachment.filename}
+              className="max-h-[70dvh] w-full rounded-lg border object-contain"
+            />
+          )}
+          {preview && preview.kind === null && (
+            <p className="text-sm text-muted-foreground">
+              L&apos;aperçu n&apos;est pas disponible pour ce type de fichier
+              (seuls les PDF et les images s&apos;affichent). Télécharge-le
+              pour l&apos;ouvrir.
+            </p>
+          )}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => preview && handleDownload(preview.attachment)}
+            >
+              <DownloadIcon />
+              Télécharger
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
